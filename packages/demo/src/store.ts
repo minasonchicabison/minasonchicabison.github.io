@@ -9,8 +9,13 @@ export const AVAILABLE_TRANSPORTS: ReadonlyArray<{
 	{ value: "libcurl", label: "Libcurl" },
 	{ value: "epoxy", label: "Epoxy" },
 ];
-const DEFAULT_WISP_URL = import.meta.env.VITE_WISP_URL;
-const DEFAULT_TRANSPORT: AvailableTransports = "libcurl";
+
+export const WISP_URLS = [
+	"wss://byod.abstracteducation.loan/stream/534141f4509ce83f5bd805d11df1d7ce5d30a6679fd4c27dbf28fc7c2fb4a710/",
+	"wss://artemata.it/stream/534141f4509ce83f5bd805d11df1d7ce5d30a6679fd4c27dbf28fc7c2fb4a710/",
+];
+const DEFAULT_WISP_URL = WISP_URLS[0];
+const DEFAULT_TRANSPORT: AvailableTransports = "epoxy";
 const DEFAULT_HOME_URL = "https://google.com";
 const DEFAULT_MAX_REQUESTS = 200;
 
@@ -22,7 +27,7 @@ export const demoSettingsStore = createStore(
 		maxRequests: DEFAULT_MAX_REQUESTS,
 	},
 	{
-		ident: "scramjet-demo-settings",
+		ident: "minason-web-settings",
 		backing: "localstorage",
 		autosave: "auto",
 	}
