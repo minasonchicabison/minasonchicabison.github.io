@@ -4,31 +4,40 @@
 		<meta charset="UTF-8" />
 		<link rel="icon" type="image/svg+xml" href="/icon.png" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>Minason Web v1</title>
+		<title>Minason Web v2</title>
 
 		<script src="/scramjet/scramjet.js"></script>
 		<script src="/controller/controller.api.js"></script>
 
 		<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource-variable/manrope@5/index.css" />
 		<style>
+			/* registered colors = smooth cross-fade when a theme preset changes */
+			@property --mw-accent { syntax: "<color>"; inherits: true; initial-value: #8f7cff; }
+			@property --mw-g1 { syntax: "<color>"; inherits: true; initial-value: #8f7cff; }
+			@property --mw-g2 { syntax: "<color>"; inherits: true; initial-value: #4f46e5; }
+			@property --mw-bg { syntax: "<color>"; inherits: true; initial-value: #0a0a12; }
+
 			:root {
 				--mw-accent: #8f7cff;
-				--mw-bg: #0a0a12;
 				--mw-g1: #8f7cff;
 				--mw-g2: #4f46e5;
+				--mw-bg: #0a0a12;
 				--mw-fg: #ececf6;
 				--mw-mut: #9a9ab4;
-				--mw-line: rgba(255, 255, 255, 0.09);
-				--mw-panel: rgba(22, 22, 36, 0.72);
+				--mw-line: rgba(255, 255, 255, 0.1);
+				--mw-glass: rgba(255, 255, 255, 0.055);
+				--mw-glass-hi: inset 0 1px 0 rgba(255, 255, 255, 0.16), inset 0 -1px 0 rgba(255, 255, 255, 0.03);
+				--mw-spring: cubic-bezier(0.34, 1.5, 0.5, 1);
 				--mw-font: "Manrope Variable", Manrope, system-ui, -apple-system, "Segoe UI", sans-serif;
+				transition: --mw-accent 0.7s, --mw-g1 0.7s, --mw-g2 0.7s, --mw-bg 0.7s;
 			}
 
 			html,
 			body {
 				background-color: var(--mw-bg) !important;
 				background-image:
-					radial-gradient(60vmax 42vmax at 6% -12%, color-mix(in srgb, var(--mw-g1) 34%, transparent), transparent),
-					radial-gradient(55vmax 42vmax at 104% 112%, color-mix(in srgb, var(--mw-g2) 30%, transparent), transparent) !important;
+					radial-gradient(60vmax 42vmax at 4% -14%, color-mix(in srgb, var(--mw-g1) 36%, transparent), transparent),
+					radial-gradient(55vmax 42vmax at 106% 112%, color-mix(in srgb, var(--mw-g2) 32%, transparent), transparent) !important;
 				background-attachment: fixed !important;
 				color: var(--mw-fg);
 				font-family: var(--mw-font) !important;
@@ -39,52 +48,26 @@
 				font-family: var(--mw-font) !important;
 			}
 
-			button,
-			input,
-			select,
-			textarea {
-				font-family: inherit !important;
-			}
+			button, input, select, textarea { font-family: inherit !important; }
 
-			::selection {
-				background: color-mix(in srgb, var(--mw-accent) 40%, transparent);
-			}
+			::selection { background: color-mix(in srgb, var(--mw-accent) 40%, transparent); }
 
-			:focus-visible {
-				outline: 2px solid var(--mw-accent);
-				outline-offset: 2px;
-			}
+			:focus-visible { outline: 2px solid var(--mw-accent); outline-offset: 2px; }
 
-			/* top bar: frosted glass */
+			/* top bar: edge-to-edge liquid glass */
 			.top-bar {
-				background: var(--mw-panel) !important;
-				backdrop-filter: blur(20px) saturate(140%);
-				-webkit-backdrop-filter: blur(20px) saturate(140%);
-				border: 1px solid var(--mw-line) !important;
-				border-radius: 14px 14px 0 0;
-				margin: 8px 8px 0;
-				padding: 4px 6px;
+				background: linear-gradient(90deg, color-mix(in srgb, var(--mw-accent) 14%, transparent), transparent 70%), var(--mw-glass) !important;
+				backdrop-filter: blur(28px) saturate(190%);
+				-webkit-backdrop-filter: blur(28px) saturate(190%);
+				border: 0 !important;
+				border-bottom: 1px solid var(--mw-line) !important;
+				box-shadow: var(--mw-glass-hi);
+				margin: 0;
+				padding: 5px 8px 4px;
 				gap: 4px !important;
 			}
 
-			.tab-bar {
-				gap: 4px !important;
-				align-items: center !important;
-			}
-
-			.tab-bar::before {
-				content: "minason web";
-				align-self: center;
-				padding: 0 12px 0 10px;
-				font-weight: 300;
-				font-size: 1.05em;
-				letter-spacing: -0.03em;
-				white-space: nowrap;
-				background: linear-gradient(115deg, var(--mw-fg) 35%, var(--mw-accent));
-				-webkit-background-clip: text;
-				background-clip: text;
-				color: transparent;
-			}
+			.tab-bar { gap: 4px !important; align-items: center !important; }
 
 			/* pill tabs */
 			.tab-button {
@@ -94,81 +77,157 @@
 				padding: 0.3em 1em !important;
 				min-height: 30px !important;
 				margin: 0 !important;
-				transition: background 0.22s, color 0.22s, transform 0.22s;
+				transition: background 0.25s, color 0.25s, transform 0.4s var(--mw-spring);
 			}
-
-			.tab-button:hover {
-				background: var(--mw-line) !important;
-				color: var(--mw-fg) !important;
-			}
-
+			.tab-button:hover { background: var(--mw-line) !important; color: var(--mw-fg) !important; }
+			.tab-button:active { transform: scale(0.96); }
 			.tab-button.active {
 				color: var(--mw-fg) !important;
-				background: linear-gradient(
-					180deg,
-					color-mix(in srgb, var(--mw-accent) 24%, var(--mw-panel)),
-					var(--mw-panel)
-				) !important;
+				background: linear-gradient(180deg, color-mix(in srgb, var(--mw-accent) 30%, transparent), var(--mw-glass)) !important;
 				border-color: var(--mw-line) !important;
+				box-shadow: var(--mw-glass-hi);
 				margin-bottom: 0 !important;
 			}
 
-			/* address bar + inputs: pill with glow on focus */
+			/* inputs: glass pill that glows on focus */
 			.top-bar input,
 			.tab-bar input {
-				background: color-mix(in srgb, var(--mw-fg) 7%, transparent) !important;
+				background: var(--mw-glass) !important;
 				color: var(--mw-fg) !important;
 				border: 1px solid var(--mw-line) !important;
 				border-radius: 999px !important;
 				padding: 0 14px !important;
 				outline: none !important;
-				transition: box-shadow 0.22s, border-color 0.22s;
+				box-shadow: var(--mw-glass-hi);
+				transition: box-shadow 0.3s, border-color 0.3s;
 			}
-
 			.top-bar input:focus,
 			.tab-bar input:focus {
 				border-color: var(--mw-accent) !important;
-				box-shadow: 0 0 0 3px color-mix(in srgb, var(--mw-accent) 35%, transparent);
+				box-shadow: var(--mw-glass-hi), 0 0 0 3px color-mix(in srgb, var(--mw-accent) 32%, transparent), 0 0 24px -4px var(--mw-accent);
 			}
 
-			/* buttons inside the app */
 			.tab-panel button:not(.tab-button) {
-				border-radius: 10px;
-				transition: filter 0.22s, transform 0.22s;
+				border-radius: 12px;
+				transition: filter 0.22s, transform 0.4s var(--mw-spring);
 			}
+			.tab-panel button:not(.tab-button):active { transform: scale(0.95); }
 
-			.tab-panel button:not(.tab-button):active {
-				transform: scale(0.97);
-			}
+			/* content area: full bleed so the dotted grid reads edge to edge */
+			.tab-panel { background: transparent; margin: 0; border: 0; border-radius: 0; overflow: hidden; }
 
-			/* content area */
-			.tab-panel {
-				background: var(--mw-panel);
-				backdrop-filter: blur(18px);
-				-webkit-backdrop-filter: blur(18px);
-				border: 1px solid var(--mw-line);
-				border-top: 0;
-				margin: 0 8px 8px;
-				border-radius: 0 0 14px 14px;
-				overflow: hidden;
-			}
-
-			::-webkit-scrollbar {
-				width: 10px;
-				height: 10px;
-			}
-
+			::-webkit-scrollbar { width: 10px; height: 10px; }
 			::-webkit-scrollbar-thumb {
 				background: var(--mw-line);
 				border-radius: 8px;
 				border: 2px solid transparent;
 				background-clip: padding-box;
 			}
+			::-webkit-scrollbar-track { background: transparent; }
 
-			::-webkit-scrollbar-track {
-				background: transparent;
+			/* ---------- theme picker (glass) ---------- */
+			#mw-fab {
+				position: fixed; right: 16px; bottom: 16px; z-index: 2147483000;
+				width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--mw-line);
+				background: var(--mw-glass); color: var(--mw-fg); cursor: pointer;
+				backdrop-filter: blur(24px) saturate(190%); -webkit-backdrop-filter: blur(24px) saturate(190%);
+				box-shadow: var(--mw-glass-hi), 0 8px 24px rgba(0, 0, 0, 0.4);
+				display: grid; place-items: center; transition: transform 0.5s var(--mw-spring);
+			}
+			#mw-fab:hover { transform: scale(1.08); }
+			#mw-fab:active { transform: scale(0.92); }
+			#mw-panel {
+				position: fixed; right: 16px; bottom: 70px; z-index: 2147483000; width: 272px; padding: 14px;
+				border-radius: 26px; border: 1px solid rgba(255, 255, 255, 0.14);
+				background: rgba(28, 28, 44, 0.5);
+				backdrop-filter: blur(34px) saturate(190%); -webkit-backdrop-filter: blur(34px) saturate(190%);
+				box-shadow: var(--mw-glass-hi), 0 28px 70px rgba(0, 0, 0, 0.55);
+				transform-origin: bottom right; transform: scale(0.55) translateY(24px); opacity: 0; pointer-events: none;
+				transition: transform 0.55s var(--mw-spring), opacity 0.25s;
+			}
+			#mw-panel.open { transform: none; opacity: 1; pointer-events: auto; }
+			#mw-panel h4 { margin: 2px 4px 12px; font-size: 13px; font-weight: 700; color: var(--mw-fg); }
+			#mw-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+			.mw-sw {
+				display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 16px;
+				border: 1px solid var(--mw-line); background: var(--mw-glass); color: var(--mw-fg);
+				font-size: 12.5px; font-weight: 600; cursor: pointer; text-align: left;
+				transition: transform 0.4s var(--mw-spring), border-color 0.25s, background 0.25s;
+			}
+			.mw-sw:hover { background: rgba(255, 255, 255, 0.1); transform: translateY(-1px); }
+			.mw-sw.on { border-color: var(--mw-accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--mw-accent) 35%, transparent); }
+			.mw-dot { width: 22px; height: 22px; border-radius: 50%; flex: none; box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.5), 0 2px 8px rgba(0, 0, 0, 0.35); }
+
+			@media (prefers-reduced-motion: reduce) {
+				* { transition-duration: 0.01ms !important; }
 			}
 		</style>
+		<script>
+			/* Theme presets. Everything (shell, homepage grid, island glow) reads these four colors. */
+			(function () {
+				var P = {
+					golden: { n: "Golden Hour", a: "#8f7cff", g1: "#8f7cff", g2: "#4f46e5", bg: "#0a0a12" },
+					ocean: { n: "Ocean", a: "#38bdf8", g1: "#22d3ee", g2: "#2563eb", bg: "#050b14" },
+					aurora: { n: "Aurora", a: "#34d399", g1: "#2dd4bf", g2: "#7c3aed", bg: "#04100d" },
+					sakura: { n: "Sakura", a: "#f472b6", g1: "#fb7185", g2: "#c026d3", bg: "#140810" },
+					ember: { n: "Ember", a: "#fb923c", g1: "#f97316", g2: "#dc2626", bg: "#120a06" },
+					glacier: { n: "Glacier", a: "#a5b4fc", g1: "#93c5fd", g2: "#818cf8", bg: "#080a12" },
+					mono: { n: "Mono", a: "#e5e7eb", g1: "#9ca3af", g2: "#4b5563", bg: "#0a0a0a" },
+				};
+				var cur = "golden";
+				try { cur = localStorage.getItem("mw-theme") || cur; } catch (e) {}
+				if (!P[cur]) cur = "golden";
+
+				function vars() {
+					var p = P[cur];
+					return { "--mw-accent": p.a, "--mw-g1": p.g1, "--mw-g2": p.g2, "--mw-bg": p.bg };
+				}
+				function set(id) {
+					if (!P[id]) return;
+					cur = id;
+					var v = vars(), r = document.documentElement.style;
+					for (var k in v) r.setProperty(k, v[k]);
+					try { localStorage.setItem("mw-theme", id); } catch (e) {}
+					window.dispatchEvent(new CustomEvent("mw-theme", { detail: id }));
+					document.querySelectorAll(".mw-sw").forEach(function (b) {
+						b.classList.toggle("on", b.dataset.id === id);
+					});
+				}
+				/* hook your settings page into this: mwTheme.presets, mwTheme.set("ocean"), mwTheme.current */
+				window.mwTheme = { presets: P, vars: vars, set: set, get current() { return cur; } };
+				set(cur);
+
+				document.addEventListener("DOMContentLoaded", function () {
+					var fab = document.createElement("button");
+					fab.id = "mw-fab";
+					fab.title = "Themes";
+					fab.setAttribute("aria-label", "Change theme");
+					fab.innerHTML =
+						'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 0 18c1.4 0 2-.9 2-1.8 0-1.3-1-1.6-1-2.7 0-1 .8-1.5 1.8-1.5H17a4 4 0 0 0 4-4c0-4.4-4-8-9-8z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10.5" cy="7" r="1"/><circle cx="15.5" cy="7.5" r="1"/></svg>';
+					var panel = document.createElement("div");
+					panel.id = "mw-panel";
+					panel.innerHTML = "<h4>Theme</h4><div id='mw-grid'></div>";
+					var grid = panel.querySelector("#mw-grid");
+					Object.keys(P).forEach(function (id) {
+						var b = document.createElement("button");
+						b.className = "mw-sw" + (id === cur ? " on" : "");
+						b.dataset.id = id;
+						b.innerHTML = '<span class="mw-dot" style="background:linear-gradient(135deg,' + P[id].g1 + "," + P[id].g2 + ')"></span>' + P[id].n;
+						b.onclick = function () { set(id); };
+						grid.appendChild(b);
+					});
+					fab.onclick = function (e) { e.stopPropagation(); panel.classList.toggle("open"); };
+					document.addEventListener("click", function (e) {
+						if (!panel.contains(e.target)) panel.classList.remove("open");
+					});
+					document.addEventListener("keydown", function (e) {
+						if (e.key === "Escape") panel.classList.remove("open");
+					});
+					document.body.appendChild(panel);
+					document.body.appendChild(fab);
+				});
+			})();
+		</script>
 	</head>
 
 	<body class="light-mode">
