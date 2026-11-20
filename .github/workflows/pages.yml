@@ -26,8 +26,7 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
       - run: pnpm install --frozen-lockfile
-      - run: pnpm build
-      - run: pnpm --filter @mercuryworkshop/scramjet-demo build
+      - run: pnpm -r --if-present build
       - uses: actions/upload-pages-artifact@v3
         with:
           path: packages/demo/dist
