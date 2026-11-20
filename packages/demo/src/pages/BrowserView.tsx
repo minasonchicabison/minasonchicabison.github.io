@@ -1,27 +1,59 @@
-import {
-	css,
-	type Delegate,
-	type Component,
-	createState,
-} from "dreamland/core";
+import { css, type Component, createState } from "dreamland/core";
 import {
 	CatchEscapedLinksPlugin,
 	UrlWatcherPlugin,
 } from "@mercuryworkshop/scramjet-utils";
-import { versionInfo } from "@mercuryworkshop/scramjet";
 import { cachePlugin, controller } from "..";
-import { demoSettingsStore, normalizeHomeUrl } from "../store";
 import homepage from "./homepage.html?raw";
 import type { Frame } from "@mercuryworkshop/scramjet-controller";
 
+/* ---------- tiny storage helper ---------- */
+const ls = {
+	get: (k: string, d: string) => {
+		try {
+			return localStorage.getItem(k) ?? d;
+		} catch {
+			return d;
+		}
+	},
+	set: (k: string, v: string) => {
+		try {
+			localStorage.setItem(k, v);
+		} catch {}
+	},
+};
+
+/* ---------- state mirrored from the active tab (the omnibox reads this) ---------- */
 export const browserState = createState({
-	url: demoSettingsStore.homeUrl,
+	url: "", // empty on purpose: no preset text in the address bar
 	title: "New tab",
 	frame: null! as Frame,
 });
 
-/** Omnibox home button calls this; BrowserView wires it up on mount. */
-export const home = { go: () => {} };
+/* ---------- search ---------- */
+const ENGINES: Record<string, { n: string; u: string }> = {
+	duckduckgo: { n: "DuckDuckGo", u: "https://duckduckgo.com/?q=" },
+	brave: { n: "Brave", u: "https://search.brave.com/search?q=" },
+	google: { n: "Google", u: "https://www.google.com/search?q=" },
+};
+const engine = () => {
+	const k = ls.get("mw-engine", "duckduckgo");
+	return ENGINES[k] ? k : "duckduckgo";
+};
+
+/** Anything that looks like an address is opened; everything else is searched. */
+export function toUrl(input: string): string {
+	const q = input.trim();
+	if (!q) return "";
+	if (/^[a-z][a-z0-9+.-]*:\/\//i.test(q)) return q;
+	if (
+		!/\s/.test(q) &&
+		(/^localhost(:\d+)?(\/.*)?$/i.test(q) ||
+			/^[^\s/]+\.[a-z]{2,}(:\d+)?(\/.*)?$/i.test(q))
+	)
+		return "https://" + q;
+	return ENGINES[engine()].u + encodeURIComponent(q);
+}
 
 /* ---------- tab names ---------- */
 // hostname -> custom tab name. Add more here.
@@ -31,7 +63,6 @@ const TAB_NAMES: Record<string, string> = {
 	"www.jsdelivr.com": "jsDelivr",
 };
 
-/** Use this wherever your tab strip needs a label for a url. */
 export function tabTitleFor(url: string, rawTitle?: string): string {
 	if (!url || url.startsWith("data:")) return "New tab";
 	try {
@@ -42,16 +73,34 @@ export function tabTitleFor(url: string, rawTitle?: string): string {
 	}
 }
 
+/* ---------- bookmarks ---------- */
+type Bm = { t: string; u: string };
+const loadBm = (): Bm[] => {
+	try {
+		return JSON.parse(ls.get("mw-bookmarks", "[]"));
+	} catch {
+		return [];
+	}
+};
+const saveBm = (l: Bm[]) => {
+	ls.set("mw-bookmarks", JSON.stringify(l));
+	pushAll();
+};
+function addBookmark(input: string) {
+	const u = toUrl(input);
+	if (!u) return;
+	const l = loadBm();
+	if (l.some((b) => b.u === u)) return;
+	saveBm([...l, { t: tabTitleFor(u), u }]);
+}
+
 /* ---------- live data for the dynamic island ---------- */
-// Battery and weather are read here (the homepage iframe is a data: URL, so it
-// can't call these APIs itself) and are posted into it.
+// Read here (the homepage iframe is a data: URL and can't) and posted in.
 const svc = {
 	bat: null as null | { level: number; charging: boolean },
 	wx: null as null | Record<string, unknown>,
-	listeners: new Set<() => void>(),
 	started: false,
 };
-const emit = () => svc.listeners.forEach((f) => f());
 
 async function startServices() {
 	if (svc.started) return;
@@ -61,7 +110,7 @@ async function startServices() {
 		if (b) {
 			const update = () => {
 				svc.bat = { level: Math.round(b.level * 100), charging: !!b.charging };
-				emit();
+				pushAll();
 			};
 			update();
 			b.addEventListener("levelchange", update);
@@ -85,7 +134,7 @@ async function startServices() {
 				day: !!r.current.is_day,
 				city: loc!.city ?? "",
 			};
-			emit();
+			pushAll();
 		} catch {}
 	};
 	loadWeather();
@@ -95,194 +144,268 @@ async function startServices() {
 const themeVars = (): Record<string, string> =>
 	(window as any).mwTheme?.vars() ?? {};
 
-/* ---------- homepage enhancement (injected into homepage.html) ---------- */
-const HOME_CSS = String.raw`
-html{background:var(--mw-bg)!important;background-image:radial-gradient(60vmax 42vmax at 50% 38%,color-mix(in srgb,var(--mw-g1) 22%,transparent),transparent),radial-gradient(55vmax 42vmax at 106% 112%,color-mix(in srgb,var(--mw-g2) 28%,transparent),transparent)!important;background-attachment:fixed!important}
-body{background:transparent!important}
-#mwg{position:fixed;inset:0;width:100%;height:100%;z-index:-1;pointer-events:none}
-#mwi{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:2147483000;width:150px;height:38px;overflow:hidden;cursor:pointer;background:#000;color:#fff;border-radius:20px;font:600 13px/1 "Manrope Variable",Manrope,system-ui,sans-serif;box-shadow:0 0 0 1px rgba(255,255,255,.08),0 12px 40px rgba(0,0,0,.55),0 0 38px -10px var(--mw-accent);transition:width .65s cubic-bezier(.34,1.45,.5,1),height .65s cubic-bezier(.34,1.45,.5,1),border-radius .55s cubic-bezier(.34,1.3,.5,1);user-select:none}
-.ly{position:absolute;left:50%;top:50%;display:flex;align-items:center;white-space:nowrap;opacity:0;filter:blur(9px);transform:translate(-50%,-50%) scale(.82);transition:opacity .3s,filter .4s,transform .55s cubic-bezier(.34,1.4,.5,1);pointer-events:none}
-.ly.on{opacity:1;filter:none;transform:translate(-50%,-50%)}
-#mwc{gap:13px;padding:10px 16px}
-#mwe{gap:26px;padding:18px 28px}
-.mwr{display:flex;align-items:center;gap:6px}
-.mwc{display:flex;flex-direction:column;gap:5px}
-.mwc small{font-size:11.5px;font-weight:500;color:#a1a1b5}
-.mwc b.big{font-size:26px;font-weight:700;letter-spacing:-.03em}
-.mwc b.mid{font-size:22px;font-weight:700;letter-spacing:-.02em}
-@media (prefers-reduced-motion:reduce){#mwi,.ly{transition-duration:.01ms!important}}
-`;
-
-const HOME_HTML = String.raw`
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource-variable/manrope@5/index.css">
-<canvas id="mwg"></canvas>
-<div id="mwi" role="status" aria-live="polite">
-<div id="mwc" class="ly on"><b id="ct"></b><span id="cw" class="mwr"></span><span id="cb" class="mwr"></span></div>
-<div id="mwe" class="ly"><div class="mwc"><b class="big" id="et"></b><small id="ed"></small></div><div class="mwc" id="ew"></div><div class="mwc" id="eb"></div></div>
-</div>
-`;
-
-const HOME_JS = String.raw`
-(function(){
-var $=function(i){return document.getElementById(i)};
-/* v1 -> v2 badge */
-Array.prototype.forEach.call(document.querySelectorAll("body *"),function(e){if(!e.children.length&&e.textContent.trim()==="v1")e.textContent="v2"});
-function hex(h){h=(h||"").trim().replace("#","");if(h.length!==6)return[143,124,255];return[parseInt(h.substr(0,2),16),parseInt(h.substr(2,2),16),parseInt(h.substr(4,2),16)]}
-var S={bat:null,wx:null},rgb=hex(getComputedStyle(document.documentElement).getPropertyValue("--mw-accent")),prevCh=null;
-
-/* ---------- reactive dotted grid ---------- */
-var c=$("mwg"),x=c.getContext("2d"),W,H,D=[],G=26,R=140,mx=-999,my=-999,ws=[];
-function size(){var r=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;c.width=W*r;c.height=H*r;x.setTransform(r,0,0,r,0,0);D=[];for(var j=G/2;j<H;j+=G)for(var i=G/2;i<W;i+=G)D.push({hx:i,hy:j,x:i,y:j,vx:0,vy:0})}
-addEventListener("resize",size);size();
-addEventListener("mousemove",function(e){mx=e.clientX;my=e.clientY});
-document.addEventListener("mouseleave",function(){mx=my=-999});
-addEventListener("pointerdown",function(e){ws.push({x:e.clientX,y:e.clientY,t:performance.now()})});
-function loop(t){
-x.clearRect(0,0,W,H);
-ws=ws.filter(function(w){return t-w.t<1400});
-var cs="rgb("+rgb[0]+","+rgb[1]+","+rgb[2]+")";
-for(var i=0;i<D.length;i++){
-var d=D[i],ox=d.hx,oy=d.hy+Math.sin(t/1600+d.hx*.012+d.hy*.01)*1.6;
-var dx=d.x-mx,dy=d.y-my,q=Math.sqrt(dx*dx+dy*dy)||1,f=0;
-if(q<R){f=1-q/R;var p=f*f*2.4;d.vx+=dx/q*p;d.vy+=dy/q*p}
-for(var k=0;k<ws.length;k++){var w=ws[k],a=t-w.t,r=a*.45,ex=d.hx-w.x,ey=d.hy-w.y,ed=Math.sqrt(ex*ex+ey*ey),gap=Math.abs(ed-r);
-if(gap<46){var s=(1-gap/46)*(1-a/1400)*3.2;d.vx+=ex/(ed||1)*s;d.vy+=ey/(ed||1)*s;f=Math.max(f,s/4)}}
-d.vx+=(ox-d.x)*.07;d.vy+=(oy-d.y)*.07;d.vx*=.84;d.vy*=.84;d.x+=d.vx;d.y+=d.vy;
-var g=Math.max(f,Math.min(1,Math.sqrt((d.x-d.hx)*(d.x-d.hx)+(d.y-d.hy)*(d.y-d.hy))/14));
-x.globalAlpha=.2+g*.75;x.fillStyle=g>.04?cs:"#c8c8e6";
-x.beginPath();x.arc(d.x,d.y,(1.1+g*2.2)/2+.4,0,6.283);x.fill()}
-requestAnimationFrame(loop)}
-requestAnimationFrame(loop);
-
-/* ---------- dynamic island ---------- */
-var I=$("mwi"),C=$("mwc"),E=$("mwe"),open=false,pinned=false,hover=false,flash=0;
-function kind(c){if(c===0)return"clear";if(c<4)return"cloud";if(c<50)return"fog";if(c<70||(c>=80&&c<83))return"rain";if(c<80||c===85||c===86)return"snow";return"storm"}
-var NAMES={clear:"Clear",cloud:"Cloudy",fog:"Fog",rain:"Rain",snow:"Snow",storm:"Storm"};
-function ic(w,s){var k=kind(w.code),cl='<path d="M7 18a4 4 0 0 1-.6-8A5.5 5.5 0 0 1 17 11.3 3.4 3.4 0 0 1 17 18z" fill="#cbd5e1"/>',b;
-if(k==="clear")b=w.day?'<circle cx="12" cy="12" r="4.5" fill="#fbbf24"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1" stroke="#fbbf24" stroke-width="1.7" stroke-linecap="round"/>':'<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" fill="#c7d2fe"/>';
-else if(k==="cloud")b=cl;
-else if(k==="fog")b=cl+'<path d="M6 20.5h12" stroke="#94a3b8" stroke-width="1.7" stroke-linecap="round"/>';
-else if(k==="rain")b=cl+'<path d="M8 19.5l-1 2.5M12 19.5l-1 2.5M16 19.5l-1 2.5" stroke="#60a5fa" stroke-width="1.7" stroke-linecap="round"/>';
-else if(k==="snow")b=cl+'<circle cx="8" cy="21" r="1.1" fill="#e0f2fe"/><circle cx="12" cy="21" r="1.1" fill="#e0f2fe"/><circle cx="16" cy="21" r="1.1" fill="#e0f2fe"/>';
-else b=cl+'<path d="M12.5 17.5 10 21h2.6l-.8 2.5" stroke="#facc15" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"/>';
-return'<svg width="'+s+'" height="'+s+'" viewBox="0 0 24 24">'+b+'</svg>'}
-function bt(b,s){var col=b.charging?"#30d158":b.level<=20?"#ff453a":"#fff",fw=18*b.level/100;
-return'<svg width="'+25*s+'" height="'+12*s+'" viewBox="0 0 25 12"><rect x=".5" y=".5" width="21" height="11" rx="3.5" fill="none" stroke="#fff" opacity=".4"/><rect x="2" y="2" width="'+fw+'" height="8" rx="2" fill="'+col+'"/><rect x="23" y="4" width="1.8" height="4" rx=".9" fill="#fff" opacity=".4"/>'+(b.charging?'<path d="M12.6 1.8 8.4 6.5h2.7l-.7 3.7 4.2-4.8h-2.7z" fill="#fff" stroke="#000" stroke-width=".5" stroke-linejoin="round"/>':'')+'</svg>'}
-function fit(){var l=open?E:C;I.style.width=l.offsetWidth+"px";I.style.height=l.offsetHeight+"px";I.style.borderRadius=open?"34px":"20px"}
-function setOpen(o){open=o;C.classList.toggle("on",!o);E.classList.toggle("on",o);fit()}
-function tick(){var n=new Date();$("ct").textContent=n.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});$("et").textContent=$("ct").textContent;$("ed").textContent=n.toLocaleDateString([],{weekday:"long",month:"long",day:"numeric"})}
-function render(){var w=S.wx,b=S.bat;
-$("cw").innerHTML=w?ic(w,17)+"<b>"+w.temp+"\u00b0</b>":"";
-$("cb").innerHTML=b?"<b>"+b.level+"%</b>"+bt(b,1):"";
-$("ew").innerHTML=w?'<div class="mwr">'+ic(w,34)+'<div class="mwc"><b class="mid">'+w.temp+"\u00b0</b><small>"+NAMES[kind(w.code)]+(w.city?" - "+w.city:"")+"</small></div></div>":"";
-$("eb").innerHTML=b?'<div class="mwr">'+bt(b,1.5)+'<div class="mwc"><b class="mid">'+b.level+"%</b><small>"+(b.charging?"Charging":"On battery")+"</small></div></div>":"";
-tick();fit();
-if(b&&prevCh!==null&&prevCh!==b.charging){clearTimeout(flash);setOpen(true);flash=setTimeout(function(){flash=0;if(!pinned&&!hover)setOpen(false)},3200)}
-if(b)prevCh=b.charging}
-setInterval(tick,1000);tick();
-I.addEventListener("mouseenter",function(){hover=true;setOpen(true)});
-I.addEventListener("mouseleave",function(){hover=false;if(!pinned&&!flash)setOpen(false)});
-I.addEventListener("click",function(){pinned=!pinned;setOpen(pinned||hover)});
-if(document.fonts&&document.fonts.ready)document.fonts.ready.then(fit);
-fit();
-
-/* ---------- messages from the shell ---------- */
-addEventListener("message",function(e){var d=e.data;if(!d||d.type!=="mw-state")return;
-if(d.vars){for(var k in d.vars)document.documentElement.style.setProperty(k,d.vars[k]);rgb=hex(d.vars["--mw-accent"])}
-S.bat=d.bat;S.wx=d.wx;render()});
-parent.postMessage({type:"mw-ready"},"*");
-})();
-`;
-
-const enhanceHome = (html: string) => {
+const buildHomeSrc = () => {
 	const vars = Object.entries(themeVars())
 		.map(([k, v]) => `${k}:${v}`)
 		.join(";");
-	const inject =
-		`<style>:root{${vars}}${HOME_CSS}</style>` +
-		HOME_HTML +
-		"<script>" +
-		HOME_JS +
-		"<\/script>";
-	return /<\/body>/i.test(html)
-		? html.replace(/<\/body>/i, () => inject + "</body>")
-		: html + inject;
-};
-
-const toDataUrl = (html: string) => {
+	const html = homepage.replace("/*VARS*/", `:root{${vars}}`);
 	let bin = "";
 	new TextEncoder().encode(html).forEach((c) => (bin += String.fromCharCode(c)));
 	return `data:text/html;charset=utf-8;base64,${btoa(bin)}`;
 };
 
-const buildHomeSrc = () => {
-	let h = homepage;
-	h = h.replaceAll("{{SCRAMJET_VERSION}}", String(versionInfo.version));
-	h = h.replaceAll("{{SCRAMJET_BUILD}}", String(versionInfo.build));
-	h = h.replaceAll(
-		"{{SCRAMJET_DATE_PRETTY}}",
-		new Date(versionInfo.date).toLocaleString(undefined, {
-			dateStyle: "short",
-			timeStyle: "short",
-		})
-	);
-	return toDataUrl(enhanceHome(h));
+/* ---------- tabs ---------- */
+type Tab = {
+	id: number;
+	url: string;
+	title: string;
+	iframe: HTMLIFrameElement;
+	frame: Frame;
 };
+const tabs: Tab[] = [];
+let activeId = 0;
+let nextId = 1;
+let host: HTMLElement | null = null;
+let inited = false;
+const activeTab = () => tabs.find((t) => t.id === activeId);
+
+function pushTo(t: Tab) {
+	t.iframe.contentWindow?.postMessage(
+		{ type: "mw-state", vars: themeVars(), bat: svc.bat, wx: svc.wx, bm: loadBm() },
+		"*"
+	);
+}
+function pushAll() {
+	tabs.forEach(pushTo);
+}
+
+function renderStrip() {
+	const el = document.getElementById("mw-tabs");
+	if (!el) return;
+	el.innerHTML = "";
+	tabs.forEach((t) => {
+		const d = document.createElement("div");
+		d.className = "mwt" + (t.id === activeId ? " on" : "");
+		d.innerHTML =
+			'<i class="mwt-dot"></i><span class="mwt-title"></span><button type="button" class="mwt-x" aria-label="Close tab">\u00d7</button>';
+		d.querySelector(".mwt-title")!.textContent = t.title;
+		d.onclick = () => select(t.id);
+		(d.querySelector(".mwt-x") as HTMLElement).onclick = (e) => {
+			e.stopPropagation();
+			closeTab(t.id);
+		};
+		el.appendChild(d);
+	});
+	const add = document.createElement("button");
+	add.type = "button";
+	add.className = "mwt-add";
+	add.title = "New tab";
+	add.setAttribute("aria-label", "New tab");
+	add.textContent = "+";
+	add.onclick = () => newTab();
+	el.appendChild(add);
+}
+
+function sync() {
+	const t = activeTab();
+	browserState.url = t?.url ?? "";
+	browserState.title = t?.title ?? "New tab";
+	browserState.frame = t?.frame as Frame;
+	document.title = t?.url ? `${t.title} - Minason Web` : "Minason Web v2";
+	renderStrip();
+}
+
+function select(id: number) {
+	activeId = id;
+	tabs.forEach((t) => t.iframe.classList.toggle("on", t.id === id));
+	sync();
+}
+
+function newTab() {
+	if (!host) return;
+	const iframe = document.createElement("iframe");
+	iframe.className = "mw-frame";
+	host.appendChild(iframe);
+	const t = { id: nextId++, url: "", title: "New tab", iframe } as Tab;
+	const urlWatcher = new UrlWatcherPlugin((url) => {
+		t.url = url.startsWith("data:") ? "" : url;
+		t.title = tabTitleFor(t.url);
+		t.id === activeId ? sync() : renderStrip();
+	});
+	const catchEscapedLinks = new CatchEscapedLinksPlugin(
+		(url) => new URL(`/?goto=${encodeURIComponent(url.href)}`, location.origin)
+	);
+	t.frame = controller.createFrame(iframe, {
+		plugins: [cachePlugin, urlWatcher, catchEscapedLinks],
+	});
+	iframe.addEventListener("load", () => pushTo(t));
+	iframe.src = buildHomeSrc();
+	tabs.push(t);
+	select(t.id);
+}
+
+function closeTab(id: number) {
+	const i = tabs.findIndex((t) => t.id === id);
+	if (i < 0) return;
+	tabs[i].iframe.remove();
+	tabs.splice(i, 1);
+	if (!tabs.length) newTab();
+	else if (id === activeId) select(tabs[Math.max(0, i - 1)].id);
+	else renderStrip();
+}
+
+export function go(input: string) {
+	const t = activeTab();
+	const u = toUrl(input);
+	if (!t || !u) return;
+	t.url = u;
+	t.title = tabTitleFor(u);
+	t.frame.go(u);
+	sync();
+}
+
+/** Omnibox home button. */
+export const home = {
+	go: () => {
+		const t = activeTab();
+		if (!t) return;
+		t.url = "";
+		t.title = "New tab";
+		t.iframe.src = buildHomeSrc();
+		sync();
+	},
+};
+
+function onMessage(e: MessageEvent) {
+	const t = tabs.find((x) => x.iframe.contentWindow === e.source);
+	if (!t) return;
+	const d = e.data;
+	if (d?.type === "mw-ready") pushTo(t);
+	else if (d?.type === "mw-go") {
+		if (t.id !== activeId) select(t.id);
+		go(d.q);
+	} else if (d?.type === "mw-add-bm") {
+		const u = prompt("Add a bookmark - enter an address:");
+		if (u) addBookmark(u);
+	} else if (d?.type === "mw-rm-bm") {
+		const l = loadBm();
+		l.splice(d.i, 1);
+		saveBm(l);
+	}
+}
+
+function initTabs(el: HTMLElement) {
+	if (inited) return;
+	inited = true;
+	host = el;
+	window.addEventListener("message", onMessage);
+	window.addEventListener("mw-theme", pushAll);
+	startServices();
+	newTab();
+	const goto = new URL(location.href).searchParams.get("goto");
+	if (goto) {
+		go(goto);
+		history.replaceState(null, "", location.href.split("?")[0]);
+	}
+}
+
+/* ---------- settings popover: theme + search engine only ---------- */
+const SETTINGS_CSS = `
+.mws{position:fixed;top:96px;right:12px;z-index:2147483000;width:292px;padding:16px;border-radius:26px;border:1px solid rgba(255,255,255,.14);background:rgba(28,28,44,.55);backdrop-filter:blur(34px) saturate(190%);-webkit-backdrop-filter:blur(34px) saturate(190%);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 28px 70px rgba(0,0,0,.55);color:#ececf6;font:500 13px "Manrope Variable",Manrope,system-ui,sans-serif;transform-origin:top right;animation:mwsin .5s cubic-bezier(.34,1.5,.5,1)}
+@keyframes mwsin{from{transform:scale(.6) translateY(-12px);opacity:0}}
+.mws h3{margin:0 0 10px;font-size:12px;font-weight:700;color:#9a9ab4;letter-spacing:.02em}
+.mws section+section{margin-top:18px}
+.mws .g{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.mws button{display:flex;align-items:center;gap:9px;padding:9px 11px;border-radius:16px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.055);color:inherit;font:600 12.5px inherit;font-family:inherit;cursor:pointer;text-align:left;transition:transform .4s cubic-bezier(.34,1.5,.5,1),background .25s,border-color .25s}
+.mws button:hover{background:rgba(255,255,255,.1);transform:translateY(-1px)}
+.mws button.on{border-color:var(--mw-accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--mw-accent) 35%,transparent)}
+.mws .d{width:20px;height:20px;border-radius:50%;flex:none;box-shadow:inset 0 1px 1px rgba(255,255,255,.5),0 2px 8px rgba(0,0,0,.35)}
+.mws .row{display:flex;flex-direction:column;gap:8px}
+.mws .foot{margin-top:16px;font-size:11.5px;color:#9a9ab4;text-align:center}
+`;
+
+let pop: HTMLDivElement | null = null;
+function closeSettings() {
+	pop?.remove();
+	pop = null;
+}
+function toggleSettings(ev?: Event) {
+	ev?.stopPropagation();
+	if (pop) return closeSettings();
+	if (!document.getElementById("mws-css")) {
+		const s = document.createElement("style");
+		s.id = "mws-css";
+		s.textContent = SETTINGS_CSS;
+		document.head.appendChild(s);
+	}
+	const T = (window as any).mwTheme;
+	const el = document.createElement("div");
+	el.className = "mws";
+	el.innerHTML =
+		`<section><h3>Theme</h3><div class="g">` +
+		Object.keys(T?.presets ?? {})
+			.map(
+				(id) =>
+					`<button data-theme="${id}"><span class="d" style="background:linear-gradient(135deg,${T.presets[id].g1},${T.presets[id].g2})"></span>${T.presets[id].n}</button>`
+			)
+			.join("") +
+		`</div></section><section><h3>Search engine</h3><div class="row">` +
+		Object.keys(ENGINES)
+			.map((k) => `<button data-engine="${k}">${ENGINES[k].n}</button>`)
+			.join("") +
+		`</div></section><div class="foot">minason web v2</div>`;
+	const mark = () =>
+		el.querySelectorAll<HTMLElement>("button").forEach((b) =>
+			b.classList.toggle(
+				"on",
+				b.dataset.theme === T?.current || b.dataset.engine === engine()
+			)
+		);
+	el.onclick = (e) => {
+		const b = (e.target as HTMLElement).closest("button");
+		if (!b) return;
+		if (b.dataset.theme) T?.set(b.dataset.theme);
+		if (b.dataset.engine) ls.set("mw-engine", b.dataset.engine);
+		mark();
+	};
+	mark();
+	document.body.appendChild(el);
+	pop = el;
+	setTimeout(
+		() =>
+			document.addEventListener(
+				"click",
+				(e) => {
+					if (pop && !pop.contains(e.target as Node)) closeSettings();
+				},
+				{ once: true }
+			),
+		0
+	);
+}
 
 /* ---------- omnibox ---------- */
 export const Omnibox: Component = function (cx) {
-	const navigate = () => {
-		let url: string;
-		try {
-			url = normalizeHomeUrl(browserState.url);
-		} catch (e) {
-			console.error("navigate failed:", e);
-			return;
-		}
-		browserState.url = url;
-		demoSettingsStore.homeUrl = browserState.url;
-		browserState.frame?.go(browserState.url);
-	};
 	return (
 		<form
 			class="url-form"
 			on:submit={(e: SubmitEvent) => {
 				e.preventDefault();
-				navigate();
+				go(browserState.url);
 			}}
 		>
 			<div class="browser-omnibox-shell">
 				<div class="omnibox-nav">
-					<button
-						type="button"
-						class="nav-btn"
-						aria-label="Back"
-						on:click={() => browserState.frame?.back()}
-					>
+					<button type="button" class="nav-btn" aria-label="Back" on:click={() => browserState.frame?.back()}>
 						<span class="material-symbols-outlined">arrow_back</span>
 					</button>
-					<button
-						type="button"
-						class="nav-btn"
-						aria-label="Forward"
-						on:click={() => browserState.frame?.forward()}
-					>
+					<button type="button" class="nav-btn" aria-label="Forward" on:click={() => browserState.frame?.forward()}>
 						<span class="material-symbols-outlined">arrow_forward</span>
 					</button>
-					<button
-						type="button"
-						class="nav-btn"
-						aria-label="Reload"
-						on:click={() => browserState.frame?.reload()}
-					>
+					<button type="button" class="nav-btn" aria-label="Reload" on:click={() => browserState.frame?.reload()}>
 						<span class="material-symbols-outlined">refresh</span>
 					</button>
-					<button
-						type="button"
-						class="nav-btn"
-						aria-label="Home"
-						on:click={() => home.go()}
-					>
+					<button type="button" class="nav-btn" aria-label="Home" on:click={() => home.go()}>
 						<span class="material-symbols-outlined">home</span>
 					</button>
 				</div>
@@ -293,12 +416,30 @@ export const Omnibox: Component = function (cx) {
 						class="url-input"
 						type="text"
 						value={use(browserState.url)}
-						on:input={(e: Event) =>
-							(browserState.url = (e.target as HTMLInputElement).value)
-						}
+						on:input={(e: Event) => (browserState.url = (e.target as HTMLInputElement).value)}
 						spellcheck="false"
 						placeholder="Search or enter address"
 					/>
+				</div>
+				<div class="omnibox-nav">
+					<button type="button" class="nav-btn" aria-label="Bookmark this page" on:click={() => addBookmark(browserState.url)}>
+						<span class="material-symbols-outlined">bookmark</span>
+					</button>
+					<button
+						type="button"
+						class="nav-btn"
+						aria-label="Fullscreen"
+						on:click={() =>
+							document.fullscreenElement
+								? document.exitFullscreen()
+								: document.documentElement.requestFullscreen()
+						}
+					>
+						<span class="material-symbols-outlined">fullscreen</span>
+					</button>
+					<button type="button" class="nav-btn" aria-label="Settings" on:click={(e: Event) => toggleSettings(e)}>
+						<span class="material-symbols-outlined">tune</span>
+					</button>
 				</div>
 			</div>
 		</form>
@@ -309,7 +450,7 @@ Omnibox.style = css`
 		display: flex;
 		align-items: center;
 		background: transparent;
-		padding: 6px 10px 8px;
+		padding: 4px 10px 8px;
 		min-width: 0;
 		width: 100%;
 		box-sizing: border-box;
@@ -390,72 +531,27 @@ Omnibox.style = css`
 	}
 `;
 
-/* ---------- browser view ---------- */
+/* ---------- browser view: holds one iframe per tab ---------- */
 const BrowserView: Component<
-	{
-		active: boolean;
-	},
+	{},
 	{},
 	{
-		frameel: HTMLIFrameElement;
+		hostel: HTMLDivElement;
 	}
 > = function (cx) {
 	cx.mount = async () => {
 		await controller.wait();
-
-		let urlWatcher = new UrlWatcherPlugin((url) => {
-			browserState.url = url;
-			browserState.title = tabTitleFor(url);
-			document.title = `${browserState.title} - Minason Web`;
-		});
-		let catchEscapedLinks = new CatchEscapedLinksPlugin(
-			(url) =>
-				new URL(`/?goto=${encodeURIComponent(url.href)}`, location.origin)
-		);
-		browserState.frame = controller.createFrame(this.frameel, {
-			plugins: [cachePlugin, urlWatcher, catchEscapedLinks],
-		});
-
-		// push theme + battery + weather into the homepage island/grid
-		const push = () =>
-			this.frameel.contentWindow?.postMessage(
-				{ type: "mw-state", vars: themeVars(), bat: svc.bat, wx: svc.wx },
-				"*"
-			);
-		svc.listeners.add(push);
-		window.addEventListener("mw-theme", push);
-		window.addEventListener("message", (e) => {
-			if (
-				e.source === this.frameel.contentWindow &&
-				e.data?.type === "mw-ready"
-			)
-				push();
-		});
-		this.frameel.addEventListener("load", push);
-		startServices();
-
-		home.go = () => {
-			browserState.url = "";
-			browserState.title = "New tab";
-			document.title = "Minason Web v2";
-			this.frameel.src = buildHomeSrc();
-		};
-		this.frameel.src = buildHomeSrc();
-
-		let goto = new URL(location.href).searchParams.get("goto");
-		if (goto) {
-			browserState.frame?.go(goto);
-			history.replaceState(null, "", location.href.split("?")[0]);
-		}
+		initTabs(this.hostel);
+		const wait = () =>
+			document.getElementById("mw-tabs")
+				? renderStrip()
+				: requestAnimationFrame(wait);
+		wait();
 	};
 
 	return (
-		<div
-			class={use(this.active).map(
-				(active) => `tab-panel browser-view ${active ? "active" : ""}`
-			)}
-		>
-			<iframe this={use(this.frameel)}></iframe>
+		<div class="tab-panel browser-view">
+			<div class="mw-host" this={use(this.hostel)}></div>
 		</div>
 	);
 };
@@ -466,17 +562,14 @@ BrowserView.style = css`
 		width: 100%;
 		min-width: 0;
 		min-height: 0;
-		display: none;
+		display: flex;
 		flex-direction: column;
 	}
-	:scope.active {
-		display: flex;
-	}
-
-	iframe {
-		background: transparent;
+	.mw-host {
 		flex: 1;
-		border: none;
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
 	}
 `;
 
