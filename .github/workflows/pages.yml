@@ -27,8 +27,21 @@ jobs:
           targets: wasm32-unknown-unknown
           components: rust-src
       - run: sudo apt-get update && sudo apt-get install -y binaryen
-      - run: cargo install --git https://github.com/r58playz/wasm-snip
-      - run: cargo install wasm-bindgen-cli --version 0.2.105 --locked
+      - name: Restore cached Rust tools
+        id: rust-tools
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/wasm-snip
+            ~/.cargo/bin/wasm-bindgen
+            ~/.cargo/bin/wasm-bindgen-test-runner
+            ~/.cargo/bin/wasm2es6js
+          key: rust-tools-${{ runner.os }}-bindgen-0.2.105-snip-r58playz-v1
+      - name: Install Rust tools (only when not cached)
+        if: steps.rust-tools.outputs.cache-hit != 'true'
+        run: |
+          cargo install --git https://github.com/r58playz/wasm-snip
+          cargo install wasm-bindgen-cli --version 0.2.105 --locked
       - run: pnpm install --frozen-lockfile
       - run: pnpm rewriter:build
         working-directory: packages/core
