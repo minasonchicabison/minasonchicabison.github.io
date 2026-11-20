@@ -25,6 +25,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
         with:
           targets: wasm32-unknown-unknown
+          components: rust-src
       - run: sudo apt-get update && sudo apt-get install -y binaryen
       - run: cargo install --git https://github.com/r58playz/wasm-snip
       - run: cargo install wasm-bindgen-cli --version 0.2.105 --locked
