@@ -1,168 +1,151 @@
 <!doctype html>
 <html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>Scramjet Demo</title>
-		<style>
-			:root {
-				color-scheme: dark;
-			}
-			* {
-				box-sizing: border-box;
-			}
-			body {
-				margin: 0;
-				min-height: 100vh;
-				font-family:
-					system-ui,
-					-apple-system,
-					"Segoe UI",
-					Roboto,
-					"Helvetica Neue",
-					Arial,
-					sans-serif;
-				background: #0f0f0f;
-				color: #e5e7eb;
-				display: grid;
-				place-items: start center;
-				padding: 30px 18px;
-			}
-			.sheet {
-				width: min(760px, 100%);
-				/*border: 1px solid #222;
-        background: #111;
-		*/
-				padding: 26px 28px;
-			}
-			h1 {
-				margin: 0 0 8px;
-				font-size: 1.55rem;
-				font-weight: 650;
-				letter-spacing: 0.005em;
-			}
-			.meta {
-				color: #9ca3af;
-				font-size: 0.78rem;
-				margin: 0 0 20px;
-			}
-			.section {
-				margin: 0 0 18px;
-			}
-			.label {
-				display: block;
-				margin-bottom: 6px;
-				color: #e5e7eb;
-				font-size: 1.1rem;
-				font-weight: 630;
-				letter-spacing: 0.01em;
-				text-transform: none;
-			}
-			p {
-				margin: 0;
-				color: #c7c7c7;
-				line-height: 1.62;
-				font-size: 0.94rem;
-				max-width: 70ch;
-			}
-			code {
-				font-family: "SF Mono", Menlo, Consolas, monospace;
-				color: #e5e7eb;
-				background: #181818;
-				border: 1px solid #2a2a2a;
-				padding: 1px 5px;
-			}
-			a {
-				color: inherit;
-				text-decoration: none;
-			}
-			a:hover {
-				text-decoration: underline;
-			}
-		</style>
-	</head>
-	<body>
-		<main class="sheet">
-			<h1>Welcome to Scramjet!</h1>
-			<p class="meta">
-				Version {{SCRAMJET_VERSION}} |
-				<a
-					href="https://github.com/MercuryWorkshop/scramjet/commit/{{SCRAMJET_BUILD}}"
-					target="_blank"
-					>Build {{SCRAMJET_BUILD}}</a
-				>
-				| Updated {{SCRAMJET_DATE_PRETTY}}
-			</p>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>New tab</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource-variable/manrope@5/index.css">
+<style>
+:root{--mw-accent:#8f7cff;--mw-g1:#8f7cff;--mw-g2:#4f46e5;--mw-bg:#0a0a12;--mw-fg:#ececf6;--mw-mut:#9a9ab4;--mw-line:rgba(255,255,255,.1);--mw-glass:rgba(255,255,255,.055);--spring:cubic-bezier(.34,1.5,.5,1)}
+/*VARS*/
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden}
+html{background:var(--mw-bg);background-image:radial-gradient(55vmax 40vmax at 50% 52%,color-mix(in srgb,var(--mw-g1) 20%,transparent),transparent),radial-gradient(55vmax 42vmax at 106% 112%,color-mix(in srgb,var(--mw-g2) 28%,transparent),transparent);color:var(--mw-fg);font-family:"Manrope Variable",Manrope,system-ui,-apple-system,"Segoe UI",sans-serif}
+#grid{position:fixed;inset:0;width:100%;height:100%;pointer-events:none}
+main{position:relative;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 20px 40px}
+.brand{position:relative;margin:0;font-weight:200;font-size:clamp(52px,8.5vw,100px);letter-spacing:-.055em;line-height:1}
+.brand span{color:color-mix(in srgb,var(--mw-accent) 75%,#fff)}
+.ver{position:absolute;top:-6px;right:-62px;padding:7px 13px;border-radius:999px;font-size:19px;font-weight:700;letter-spacing:0;color:var(--mw-accent);background:var(--mw-glass);border:1px solid var(--mw-line);box-shadow:inset 0 1px 0 rgba(255,255,255,.14)}
+.tag{margin:14px 0 26px;font-size:16px;font-weight:400;color:var(--mw-mut)}
+form{width:min(580px,92vw)}
+.search{display:flex;align-items:center;gap:12px;height:54px;padding:0 20px;border-radius:999px;border:1px solid var(--mw-line);background:var(--mw-glass);backdrop-filter:blur(26px) saturate(190%);-webkit-backdrop-filter:blur(26px) saturate(190%);box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 14px 40px rgba(0,0,0,.3);transition:box-shadow .35s,border-color .35s,transform .5s var(--spring)}
+.search:focus-within{border-color:var(--mw-accent);transform:scale(1.015);box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 0 0 4px color-mix(in srgb,var(--mw-accent) 28%,transparent),0 0 40px -6px var(--mw-accent)}
+.search svg{flex:none;color:var(--mw-mut)}
+.search input{flex:1;min-width:0;background:none;border:0;outline:0;color:var(--mw-fg);font:500 16px inherit;font-family:inherit}
+.search input::placeholder{color:var(--mw-mut)}
+.bm{margin-top:34px;text-align:center}
+.bm h2{margin:0 0 12px;font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mw-mut)}
+.chips{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;max-width:640px}
+.chip{position:relative;display:flex;align-items:center;gap:8px;height:40px;padding:0 16px;border-radius:14px;border:1px solid var(--mw-line);background:var(--mw-glass);color:var(--mw-fg);font:600 13.5px inherit;font-family:inherit;cursor:pointer;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:inset 0 1px 0 rgba(255,255,255,.1);transition:transform .45s var(--spring),background .25s}
+.chip:hover{background:rgba(255,255,255,.1);transform:translateY(-2px)}
+.chip:active{transform:scale(.95)}
+.chip img{width:16px;height:16px;border-radius:4px}
+.chip.add{border-style:dashed;background:transparent;color:var(--mw-mut)}
+.chip .x{display:none;margin-left:2px;width:18px;height:18px;border-radius:50%;place-items:center;font-size:13px;line-height:1;color:var(--mw-mut)}
+.chip:hover .x{display:grid}
+.chip .x:hover{background:var(--mw-line);color:var(--mw-fg)}
+/* dynamic island */
+#mwi{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:50;width:150px;height:38px;overflow:hidden;cursor:pointer;background:#000;color:#fff;border-radius:20px;font:600 13px/1 "Manrope Variable",Manrope,system-ui,sans-serif;box-shadow:0 0 0 1px rgba(255,255,255,.08),0 12px 40px rgba(0,0,0,.55),0 0 38px -10px var(--mw-accent);transition:width .65s cubic-bezier(.34,1.45,.5,1),height .65s cubic-bezier(.34,1.45,.5,1),border-radius .55s cubic-bezier(.34,1.3,.5,1);user-select:none}
+.ly{position:absolute;left:50%;top:50%;display:flex;align-items:center;white-space:nowrap;opacity:0;filter:blur(9px);transform:translate(-50%,-50%) scale(.82);transition:opacity .3s,filter .4s,transform .55s cubic-bezier(.34,1.4,.5,1);pointer-events:none}
+.ly.on{opacity:1;filter:none;transform:translate(-50%,-50%)}
+#mwc{gap:13px;padding:10px 16px}
+#mwe{gap:26px;padding:18px 28px}
+.mwr{display:flex;align-items:center;gap:6px}
+.mwc{display:flex;flex-direction:column;gap:5px}
+.mwc small{font-size:11.5px;font-weight:500;color:#a1a1b5}
+.mwc b.big{font-size:26px;font-weight:700;letter-spacing:-.03em}
+.mwc b.mid{font-size:22px;font-weight:700;letter-spacing:-.02em}
+@media (max-width:700px){.ver{right:-8px;top:-34px}}
+@media (prefers-reduced-motion:reduce){*{transition-duration:.01ms!important}}
+</style>
+</head>
+<body>
+<canvas id="grid"></canvas>
+<div id="mwi" role="status" aria-live="polite">
+  <div id="mwc" class="ly on"><b id="ct"></b><span id="cw" class="mwr"></span><span id="cb" class="mwr"></span></div>
+  <div id="mwe" class="ly"><div class="mwc"><b class="big" id="et"></b><small id="ed"></small></div><div class="mwc" id="ew"></div><div class="mwc" id="eb"></div></div>
+</div>
+<main>
+  <h1 class="brand">minason <span>web</span><i class="ver">v2</i></h1>
+  <p class="tag">Golden hour for browsing.</p>
+  <form id="f" autocomplete="off">
+    <label class="search">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="text" spellcheck="false" placeholder="Search or enter address" aria-label="Search or enter address">
+    </label>
+  </form>
+  <section class="bm"><h2>Bookmarks</h2><div class="chips" id="chips"></div></section>
+</main>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+function hex(h){h=(h||"").trim().replace("#","");if(h.length!==6)return[143,124,255];return[parseInt(h.substr(0,2),16),parseInt(h.substr(2,2),16),parseInt(h.substr(4,2),16)]}
+var S={bat:null,wx:null},rgb=hex(getComputedStyle(document.documentElement).getPropertyValue("--mw-accent")),prevCh=null;
+function send(m){parent.postMessage(m,"*")}
 
-			<section class="section">
-				<p>
-					<a href="https://github.com/MercuryWorkshop/scramjet" target="_blank"
-						><strong>Scramjet</strong></a
-					>
-					is an experimental <strong>interception-based web proxy</strong>,
-					designed to evade internet censorship and bypass arbitrary browser
-					restrictions.<br /><br />
-					Scramjet allows you to sandbox arbitrary web content, bypass CORS
-					restrictions on loading websites, and instrument and debug websites
-					inside the browser itself. This is accomplished through a combination
-					of interception, rewriting, and sandboxing techniques. You can learn
-					more about the technical details
-					<a
-						href="https://developer.puter.com/blog/how-I-ported-the-web-to-the-web/"
-						target="_blank"
-						><strong>here</strong></a
-					>.<br /><br />
-					If you're interested in contributing to scramjet, or want to build
-					your own web proxy or application using it, you should check out the
-					<a href="https://github.com/MercuryWorkshop/scramjet" target="_blank"
-						><strong>GitHub repository</strong></a
-					>.<br /><br />
-					This website is a demo of scramjet's capabilities, letting you browse
-					the web proxied through scramjet, inspect how scramjet rewrites
-					requests and responses, and see how scramjet handles your custom
-					content in the playground.
-				</p>
-			</section>
+/* search + bookmarks */
+$("f").addEventListener("submit",function(e){e.preventDefault();var v=$("q").value.trim();if(v)send({type:"mw-go",q:v})});
+function chips(list){var box=$("chips");box.innerHTML="";
+(list||[]).forEach(function(b,i){var c=document.createElement("button");c.className="chip";c.type="button";
+var im=document.createElement("img");try{im.src="https://icons.duckduckgo.com/ip3/"+new URL(b.u).hostname+".ico"}catch(e){}im.alt="";im.onerror=function(){im.remove()};c.appendChild(im);
+c.appendChild(document.createTextNode(b.t));
+var x=document.createElement("span");x.className="x";x.textContent="\u00d7";x.title="Remove";x.onclick=function(ev){ev.stopPropagation();send({type:"mw-rm-bm",i:i})};c.appendChild(x);
+c.onclick=function(){send({type:"mw-go",q:b.u})};box.appendChild(c)});
+var a=document.createElement("button");a.className="chip add";a.type="button";a.textContent="+  Add";a.onclick=function(){send({type:"mw-add-bm"})};box.appendChild(a)}
+chips([]);
 
-			<section class="section">
-				<span class="label">Browser</span>
-				<p>
-					Try entering a URL in the box above to browse the web proxied through
-					scramjet.<br />
-					All traffic sent through scramjet is
-					<strong>fully end-to-end encrypted</strong> with TLS, powered by
-					<a href="https://github.com/ading2210/libcurl.js" target="_blank"
-						><strong>libcurl.js</strong></a
-					>
-					and the
-					<a
-						href="https://github.com/MercuryWorkshop/wisp-protocol"
-						target="_blank"
-						><strong>wisp protocol</strong></a
-					>.
-				</p>
-			</section>
+/* reactive dotted grid */
+var c=$("grid"),x=c.getContext("2d"),W,H,D=[],G=26,R=140,mx=-999,my=-999,ws=[];
+function size(){var r=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;c.width=W*r;c.height=H*r;x.setTransform(r,0,0,r,0,0);D=[];for(var j=G/2;j<H;j+=G)for(var i=G/2;i<W;i+=G)D.push({hx:i,hy:j,x:i,y:j,vx:0,vy:0})}
+addEventListener("resize",size);size();
+addEventListener("mousemove",function(e){mx=e.clientX;my=e.clientY});
+document.addEventListener("mouseleave",function(){mx=my=-999});
+addEventListener("pointerdown",function(e){ws.push({x:e.clientX,y:e.clientY,t:performance.now()})});
+function loop(t){
+x.clearRect(0,0,W,H);
+ws=ws.filter(function(w){return t-w.t<1400});
+var cs="rgb("+rgb[0]+","+rgb[1]+","+rgb[2]+")";
+for(var i=0;i<D.length;i++){
+var d=D[i],ox=d.hx,oy=d.hy+Math.sin(t/1600+d.hx*.012+d.hy*.01)*1.6;
+var dx=d.x-mx,dy=d.y-my,q=Math.sqrt(dx*dx+dy*dy)||1,f=0;
+if(q<R){f=1-q/R;var p=f*f*2.4;d.vx+=dx/q*p;d.vy+=dy/q*p}
+for(var k=0;k<ws.length;k++){var w=ws[k],a=t-w.t,r=a*.45,ex=d.hx-w.x,ey=d.hy-w.y,ed=Math.sqrt(ex*ex+ey*ey),gap=Math.abs(ed-r);
+if(gap<46){var s=(1-gap/46)*(1-a/1400)*3.2;d.vx+=ex/(ed||1)*s;d.vy+=ey/(ed||1)*s;f=Math.max(f,s/4)}}
+d.vx+=(ox-d.x)*.07;d.vy+=(oy-d.y)*.07;d.vx*=.84;d.vy*=.84;d.x+=d.vx;d.y+=d.vy;
+var g=Math.max(f,Math.min(1,Math.sqrt((d.x-d.hx)*(d.x-d.hx)+(d.y-d.hy)*(d.y-d.hy))/14));
+x.globalAlpha=.2+g*.75;x.fillStyle=g>.04?cs:"#c8c8e6";
+x.beginPath();x.arc(d.x,d.y,(1.1+g*2.2)/2+.4,0,6.283);x.fill()}
+requestAnimationFrame(loop)}
+requestAnimationFrame(loop);
 
-			<section class="section">
-				<span class="label">Requests</span>
-				<p>
-					You can inspect all the requests sent through scramjet, and what
-					transformations are applied in the requests tab.<br />
-					Note that requests will not be captured until you first click on the
-					requests tab.
-				</p>
-			</section>
+/* dynamic island */
+var I=$("mwi"),C=$("mwc"),E=$("mwe"),open=false,pinned=false,hover=false,flash=0;
+function kind(c){if(c===0)return"clear";if(c<4)return"cloud";if(c<50)return"fog";if(c<70||(c>=80&&c<83))return"rain";if(c<80||c===85||c===86)return"snow";return"storm"}
+var NAMES={clear:"Clear",cloud:"Cloudy",fog:"Fog",rain:"Rain",snow:"Snow",storm:"Storm"};
+function ic(w,s){var k=kind(w.code),cl='<path d="M7 18a4 4 0 0 1-.6-8A5.5 5.5 0 0 1 17 11.3 3.4 3.4 0 0 1 17 18z" fill="#cbd5e1"/>',b;
+if(k==="clear")b=w.day?'<circle cx="12" cy="12" r="4.5" fill="#fbbf24"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1" stroke="#fbbf24" stroke-width="1.7" stroke-linecap="round"/>':'<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" fill="#c7d2fe"/>';
+else if(k==="cloud")b=cl;
+else if(k==="fog")b=cl+'<path d="M6 20.5h12" stroke="#94a3b8" stroke-width="1.7" stroke-linecap="round"/>';
+else if(k==="rain")b=cl+'<path d="M8 19.5l-1 2.5M12 19.5l-1 2.5M16 19.5l-1 2.5" stroke="#60a5fa" stroke-width="1.7" stroke-linecap="round"/>';
+else if(k==="snow")b=cl+'<circle cx="8" cy="21" r="1.1" fill="#e0f2fe"/><circle cx="12" cy="21" r="1.1" fill="#e0f2fe"/><circle cx="16" cy="21" r="1.1" fill="#e0f2fe"/>';
+else b=cl+'<path d="M12.5 17.5 10 21h2.6l-.8 2.5" stroke="#facc15" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"/>';
+return'<svg width="'+s+'" height="'+s+'" viewBox="0 0 24 24">'+b+'</svg>'}
+function bt(b,s){var col=b.charging?"#30d158":b.level<=20?"#ff453a":"#fff",fw=18*b.level/100;
+return'<svg width="'+25*s+'" height="'+12*s+'" viewBox="0 0 25 12"><rect x=".5" y=".5" width="21" height="11" rx="3.5" fill="none" stroke="#fff" opacity=".4"/><rect x="2" y="2" width="'+fw+'" height="8" rx="2" fill="'+col+'"/><rect x="23" y="4" width="1.8" height="4" rx=".9" fill="#fff" opacity=".4"/>'+(b.charging?'<path d="M12.6 1.8 8.4 6.5h2.7l-.7 3.7 4.2-4.8h-2.7z" fill="#fff" stroke="#000" stroke-width=".5" stroke-linejoin="round"/>':'')+'</svg>'}
+function fit(){var l=open?E:C;I.style.width=l.offsetWidth+"px";I.style.height=l.offsetHeight+"px";I.style.borderRadius=open?"34px":"20px"}
+function setOpen(o){open=o;C.classList.toggle("on",!o);E.classList.toggle("on",o);fit()}
+function tick(){var n=new Date();$("ct").textContent=n.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});$("et").textContent=$("ct").textContent;$("ed").textContent=n.toLocaleDateString([],{weekday:"long",month:"long",day:"numeric"})}
+function render(){var w=S.wx,b=S.bat;
+$("cw").innerHTML=w?ic(w,17)+"<b>"+w.temp+"\u00b0</b>":"";
+$("cb").innerHTML=b?"<b>"+b.level+"%</b>"+bt(b,1):"";
+$("ew").innerHTML=w?'<div class="mwr">'+ic(w,34)+'<div class="mwc"><b class="mid">'+w.temp+"\u00b0</b><small>"+NAMES[kind(w.code)]+(w.city?" - "+w.city:"")+"</small></div></div>":"";
+$("eb").innerHTML=b?'<div class="mwr">'+bt(b,1.5)+'<div class="mwc"><b class="mid">'+b.level+"%</b><small>"+(b.charging?"Charging":"On battery")+"</small></div></div>":"";
+tick();fit();
+if(b&&prevCh!==null&&prevCh!==b.charging){clearTimeout(flash);setOpen(true);flash=setTimeout(function(){flash=0;if(!pinned&&!hover)setOpen(false)},3200)}
+if(b)prevCh=b.charging}
+setInterval(tick,1000);tick();
+I.addEventListener("mouseenter",function(){hover=true;setOpen(true)});
+I.addEventListener("mouseleave",function(){hover=false;if(!pinned&&!flash)setOpen(false)});
+I.addEventListener("click",function(){pinned=!pinned;setOpen(pinned||hover)});
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(fit);
+fit();
 
-			<section class="section">
-				<span class="label">Playground</span>
-				<p>
-					The playground lets you write your own html/css/js snippets which will
-					be run inside the scramjet sandbox. Your files are "served" by
-					scramjet from a fake origin, which can be configured to be any URL.
-					Notice that if you add a <code>console.log(location.href)</code> in
-					your code, the page will really be running on the fake origin.
-				</p>
-			</section>
-		</main>
-	</body>
+/* state from the shell: theme, battery, weather, bookmarks */
+addEventListener("message",function(e){var d=e.data;if(!d||d.type!=="mw-state")return;
+if(d.vars){for(var k in d.vars)document.documentElement.style.setProperty(k,d.vars[k]);rgb=hex(d.vars["--mw-accent"])}
+S.bat=d.bat;S.wx=d.wx;chips(d.bm);render()});
+send({type:"mw-ready"});
+})();
+</script>
+</body>
 </html>
