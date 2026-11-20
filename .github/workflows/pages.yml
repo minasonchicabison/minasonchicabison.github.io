@@ -25,7 +25,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
         with:
           targets: wasm32-unknown-unknown
+      - run: sudo apt-get update && sudo apt-get install -y binaryen
+      - run: cargo install --git https://github.com/r58playz/wasm-snip
+      - run: cargo install wasm-bindgen-cli
       - run: pnpm install --frozen-lockfile
+      - run: pnpm rewriter:build
+        working-directory: packages/core
       - run: pnpm -r --if-present build
       - uses: actions/upload-pages-artifact@v3
         with:
