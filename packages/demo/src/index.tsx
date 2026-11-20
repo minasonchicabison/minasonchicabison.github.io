@@ -5,22 +5,55 @@ import EpoxyClient from "@mercuryworkshop/epoxy-transport";
 import { defaultConfigDev } from "@mercuryworkshop/scramjet";
 import { Controller } from "@mercuryworkshop/scramjet-controller";
 import { HttpCachePlugin } from "@mercuryworkshop/scramjet-utils";
-import { demoSettingsStore } from "./store";
+import { demoSettingsStore, WISP_URLS } from "./store";
 
 let app = document.getElementById("app")!;
 
 let controller: InstanceType<typeof Controller>;
 const cachePlugin = new HttpCachePlugin();
 
-export function getTransport(): LibcurlClient | EpoxyClient {
-	const wispUrl = demoSettingsStore.wispUrl;
-	switch (demoSettingsStore.transport) {
-		case "epoxy":
-			return new EpoxyClient({ wisp: wispUrl });
-		case "libcurl":
-		default:
-			return new LibcurlClient({ wisp: wispUrl });
+export function getTransport(
+	wispOverride?: string,
+	kind: string = demoSettingsStore.transport
+): LibcurlClient | EpoxyClient {
+	const wisp = wispOverride ?? demoSettingsStore.wispUrl;
+	return kind === "epoxy"
+		? new EpoxyClient({ wisp })
+		: new LibcurlClient({ wisp });
+}
+
+function probeWisp(url: string, ms = 4000): Promise<boolean> {
+	return new Promise((resolve) => {
+		let ws: WebSocket | undefined;
+		const timer = setTimeout(() => {
+			try {
+				ws?.close();
+			} catch {}
+			resolve(false);
+		}, ms);
+		try {
+			ws = new WebSocket(url);
+			ws.onopen = () => {
+				clearTimeout(timer);
+				ws!.close();
+				resolve(true);
+			};
+			ws.onerror = () => {
+				clearTimeout(timer);
+				resolve(false);
+			};
+		} catch {
+			clearTimeout(timer);
+			resolve(false);
+		}
+	});
+}
+
+async function pickWisp(): Promise<string> {
+	for (const url of [demoSettingsStore.wispUrl, ...WISP_URLS]) {
+		if (await probeWisp(url)) return url;
 	}
+	return demoSettingsStore.wispUrl;
 }
 
 async function waitForControllerOrReady(timeoutMs = 10000): Promise<void> {
@@ -93,12 +126,24 @@ async function init() {
 		if (!readySw) {
 			throw new Error("No service worker available for controller");
 		}
-		controller = new Controller({
-			serviceworker: readySw,
-			transport: getTransport(),
-			scramjetConfig: defaultConfigDev,
-		});
-		await controller.wait();
+
+		const wisp = await pickWisp();
+		try {
+			controller = new Controller({
+				serviceworker: readySw,
+				transport: getTransport(wisp, demoSettingsStore.transport),
+				scramjetConfig: defaultConfigDev,
+			});
+			await controller.wait();
+		} catch (err) {
+			console.warn("Primary transport failed, falling back to libcurl", err);
+			controller = new Controller({
+				serviceworker: readySw,
+				transport: getTransport(wisp, "libcurl"),
+				scramjetConfig: defaultConfigDev,
+			});
+			await controller.wait();
+		}
 		console.log(controller);
 		interstitial.$.state.status = "Controller initialized";
 		interstitial.close();
