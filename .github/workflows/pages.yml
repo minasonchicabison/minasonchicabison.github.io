@@ -43,7 +43,7 @@ jobs:
           cargo install --git https://github.com/r58playz/wasm-snip
           cargo install wasm-bindgen-cli --version 0.2.105 --locked
       - run: pnpm install --frozen-lockfile
-      - run: pnpm rewriter:build
+      - run: RELEASE=1 pnpm rewriter:build
         working-directory: packages/core
       - run: pnpm -r --if-present build
       - uses: actions/upload-pages-artifact@v3

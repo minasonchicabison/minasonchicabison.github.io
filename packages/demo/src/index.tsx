@@ -7,7 +7,11 @@ import { Controller } from "@mercuryworkshop/scramjet-controller";
 import { HttpCachePlugin } from "@mercuryworkshop/scramjet-utils";
 import { demoSettingsStore, WISP_URLS } from "./store";
 
+declare const __MW_BUILD_ID__: string;
+
 let app = document.getElementById("app")!;
+const buildAsset = (path: string): string =>
+	path + "?v=" + encodeURIComponent(__MW_BUILD_ID__);
 
 let controller: InstanceType<typeof Controller>;
 const cachePlugin = new HttpCachePlugin();
@@ -56,25 +60,56 @@ async function pickWisp(): Promise<string> {
 	return demoSettingsStore.wispUrl;
 }
 
-async function waitForControllerOrReady(timeoutMs = 10000): Promise<void> {
-	if (navigator.serviceWorker.controller) return;
+function isCurrentServiceWorker(
+	worker: ServiceWorker | null
+): worker is ServiceWorker {
+	if (!worker) return false;
+	try {
+		return new URL(worker.scriptURL).searchParams.get("v") === __MW_BUILD_ID__;
+	} catch {
+		return false;
+	}
+}
 
-	const ready = navigator.serviceWorker.ready.then(() => {});
-	const controllerChanged = new Promise<void>((resolve) => {
-		const onChange = () => {
+async function waitForController(timeoutMs = 15000): Promise<ServiceWorker> {
+	const currentController = () => {
+		const worker = navigator.serviceWorker.controller;
+		return isCurrentServiceWorker(worker) ? worker : null;
+	};
+
+	let worker = currentController();
+	if (worker) return worker;
+
+	// "ready" means an active registration exists, not that this page is controlled.
+	await navigator.serviceWorker.ready;
+	worker = currentController();
+	if (worker) return worker;
+
+	await new Promise<void>((resolve, reject) => {
+		let timer = 0;
+		const cleanup = () => {
 			navigator.serviceWorker.removeEventListener("controllerchange", onChange);
+			window.clearTimeout(timer);
+		};
+		const onChange = () => {
+			if (!currentController()) return;
+			cleanup();
 			resolve();
 		};
-		navigator.serviceWorker.addEventListener("controllerchange", onChange, {
-			once: true,
-		} as any);
-	});
-	const timeout = new Promise<void>((resolve) =>
-		setTimeout(resolve, timeoutMs)
-	);
 
-	// Wait for whichever happens first; on timeout we continue to avoid blocking the UI.
-	await Promise.race([ready, controllerChanged, timeout]);
+		navigator.serviceWorker.addEventListener("controllerchange", onChange);
+		timer = window.setTimeout(() => {
+			cleanup();
+			reject(new Error("The current service worker did not take control of this page."));
+		}, timeoutMs);
+		onChange();
+	});
+
+	worker = currentController();
+	if (!worker) {
+		throw new Error("No current service worker is controlling this page.");
+	}
+	return worker;
 }
 
 async function init() {
@@ -85,7 +120,11 @@ async function init() {
 	interstitial.showModal();
 
 	try {
-		const registration = await navigator.serviceWorker.register("./sw.js");
+		const serviceWorkerUrl = new URL("/sw.js", location.origin);
+		serviceWorkerUrl.searchParams.set("v", __MW_BUILD_ID__);
+		const registration = await navigator.serviceWorker.register(serviceWorkerUrl.href, {
+			updateViaCache: "none",
+		});
 
 		// Non-blocking progress updates on state transitions.
 		const updateStatus = (sw: ServiceWorker | null) => {
@@ -116,22 +155,23 @@ async function init() {
 
 		updateStatus(registration.installing ?? registration.waiting ?? null);
 
-		// Wait for control or readiness with a timeout; don't hang the UI on updates.
+		// Wait until this exact build's worker controls the current page.
 		interstitial.$.state.status =
-			"Waiting for service worker to take control...";
-		await waitForControllerOrReady(10000);
+			"Waiting for the current service worker to take control...";
+		const readySw = await waitForController();
 		interstitial.$.state.status =
-			"Service worker ready, waiting for controller init";
-		const readySw = navigator.serviceWorker.controller ?? registration.active;
-		if (!readySw) {
-			throw new Error("No service worker available for controller");
-		}
+			"Service worker is controlling this page";
 
 		const wisp = await pickWisp();
 		try {
 			controller = new Controller({
 				serviceworker: readySw,
 				transport: getTransport(wisp, demoSettingsStore.transport),
+				config: {
+					scramjetPath: buildAsset("/scramjet/scramjet.js"),
+					injectPath: buildAsset("/controller/controller.inject.js"),
+					wasmPath: buildAsset("/scramjet/scramjet.wasm"),
+				},
 				scramjetConfig: defaultConfigDev,
 			});
 			await controller.wait();
@@ -140,6 +180,11 @@ async function init() {
 			controller = new Controller({
 				serviceworker: readySw,
 				transport: getTransport(wisp, "libcurl"),
+				config: {
+					scramjetPath: buildAsset("/scramjet/scramjet.js"),
+					injectPath: buildAsset("/controller/controller.inject.js"),
+					wasmPath: buildAsset("/scramjet/scramjet.wasm"),
+				},
 				scramjetConfig: defaultConfigDev,
 			});
 			await controller.wait();
@@ -153,8 +198,7 @@ async function init() {
 		try {
 			interstitial.close();
 		} catch {}
-		app.innerText =
-			"Failed to register service worker. Check console for details.";
+		throw e;
 	}
 }
 
@@ -174,5 +218,11 @@ async function mount() {
 	}
 }
 
-init().then(() => mount());
+init()
+	.then(() => mount())
+	.catch((error) => {
+		app.innerText = "Failed to initialize Minason Web: " +
+			(error instanceof Error ? error.message : String(error));
+		console.error(error);
+	});
 export { controller, cachePlugin };
