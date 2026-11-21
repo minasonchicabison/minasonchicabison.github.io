@@ -339,7 +339,6 @@ function initTabs(el: HTMLElement) {
 	host = el;
 	window.addEventListener("message", onMessage);
 	window.addEventListener("mw-theme", pushAll);
-	startServices();
 	newTab();
 	const goto = new URL(location.href).searchParams.get("goto");
 	if (goto) {
