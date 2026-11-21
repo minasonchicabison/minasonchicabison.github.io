@@ -196,36 +196,21 @@ function startServices() {
 
 // EDIT THESE STRINGS to change the rotating greeting under the Minason Web heading.
 const WELCOME_MESSAGES = [
-	"Your tabs called. They want a union.",
-	"Powered by questionable amounts of caffeine.",
-	"Browsing at the speed of mild inconvenience.",
-	"Another day, another 47 open tabs.",
-	"Your search history is between you and the pixels.",
-	"Welcome back, professional button clicker.",
-	"Loading vibes… please do not refresh the vibes.",
-	"Internet explorer? We barely know her.",
-	"Now with 12% more unnecessary gradients.",
-	"Somewhere, a server just sneezed.",
-	"Go forth and open suspiciously many tabs.",
-	"Your curiosity has entered the chat.",
-	"Built different. Compiled similarly.",
-	"Less spinning wheel, more winning feel.",
-	"Today's forecast: scattered tabs.",
-	"Ctrl+T is a lifestyle.",
-	"Be right back, negotiating with the internet.",
-	"Searching for the meaning of the loading bar.",
-	"One small click for you, one giant request for the server.",
-	"Please keep all hands inside the browser.",
-	"Fresh tab. Same chaotic energy.",
-	"Your bookmarks are judging your life choices.",
-	"404 problems, but a vibe ain't one.",
-	"Welcome to the information superhighway. Mind the potholes.",
-	"Tabs are temporary. Screenshots are forever.",
-	"Maximum curiosity. Minimum context.",
-	"Currently orbiting the world wide web.",
-	"May your pages load and your snacks be plentiful.",
-	"Shiny pixels, questionable decisions.",
-	"Congratulations, you found the internet again."
+	"RIP farhan",
+	"powered by the big fish",
+	"if anything breaks it has to be your fault",
+	"if you open 67 tabs and ask why it doesn't work i can't help you",
+	"does the search history save",
+	"anything but work",
+	"do your work",
+	"better than abstract",
+	"let's get these grades up",
+	"tip: you can open the dynamic island",
+	"tip: if the browser ever stops working click the dot on the url",
+	"hi hello",
+	"welcome",
+	"RIP minason games"
+	
 ];
 
 function escapeHtml(value: string): string {
