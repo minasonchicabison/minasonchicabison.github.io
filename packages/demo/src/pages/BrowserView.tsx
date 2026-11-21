@@ -482,12 +482,15 @@ function toggleSettings(ev?: Event) {
 }
 
 
+// The transport created in index.tsx starts on this selected Wisp endpoint.
+let transportBoundWisp = getActiveWispUrl(demoSettingsStore.wispUrl);
 let transportReconnectNeeded = false;
 let transportReconnectInFlight = false;
 
 async function rebindTransportToActiveWisp() {
 	const url = getActiveWispUrl(demoSettingsStore.wispUrl);
 	if (getWispStatus(url).state !== "connected") return;
+	if (url !== transportBoundWisp) transportReconnectNeeded = true;
 	if (!transportReconnectNeeded || transportReconnectInFlight) return;
 	// The first Wisp handshake can finish before Controller has been constructed.
 	if (!controller) return;
@@ -500,6 +503,7 @@ async function rebindTransportToActiveWisp() {
 		const transport = getTransport(url, kind);
 		await transport.init();
 		controller.setTransport(transport);
+		transportBoundWisp = url;
 		transportReconnectNeeded = false;
 		console.info("Minason Web: proxy transport reconnected to Wisp", url);
 	} catch (error) {
@@ -751,10 +755,10 @@ window.addEventListener("mw-wisp-status", () => {
 	updateWispDot();
 	const active = getActiveWispUrl(demoSettingsStore.wispUrl);
 	const state = getWispStatus(active).state;
-	if (state === "failed" || state === "idle") {
+	if (active !== transportBoundWisp || state === "failed" || state === "idle") {
 		transportReconnectNeeded = true;
-	} else if (state === "connected") {
-		if (!transportBoundWisp) transportBoundWisp = active;
+	}
+	if (state === "connected") {
 		void rebindTransportToActiveWisp();
 	}
 	if (wispPop) renderWispPanel(wispPop);
@@ -953,7 +957,10 @@ const BrowserView: Component<
 	cx.mount = async () => {
 		updateWispDot();
 		await controller.wait();
+		const activeWisp = getActiveWispUrl(demoSettingsStore.wispUrl);
+		if (activeWisp !== transportBoundWisp) transportReconnectNeeded = true;
 		transportReconnectNeeded =
+			transportReconnectNeeded ||
 			getWispStatus(transportBoundWisp).state !== "connected";
 		initTabs(this.hostel);
 		const wait = () =>
