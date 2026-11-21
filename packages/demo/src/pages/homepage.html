@@ -34,23 +34,33 @@ form{width:min(580px,92vw)}
 .chip .x{display:none;margin-left:2px;width:18px;height:18px;border-radius:50%;place-items:center;font-size:13px;line-height:1;color:var(--mw-mut)}
 .chip:hover .x{display:grid}
 .chip .x:hover{background:var(--mw-line);color:var(--mw-fg)}
-/* fluid school-status dynamic island */
-#mwi{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:2147483001;width:176px;height:48px;max-width:calc(100vw - 24px);overflow:hidden;cursor:pointer;background:linear-gradient(145deg,rgba(25,26,43,.98),rgba(4,5,13,.985));color:#fff;border:1px solid rgba(206,203,255,.19);border-radius:26px;font:600 12px/1 "Manrope Variable",Manrope,system-ui,sans-serif;box-shadow:0 0 0 1px rgba(255,255,255,.035),0 12px 38px rgba(0,0,0,.48),0 0 28px -8px var(--mw-accent);transition:width .68s cubic-bezier(.16,1,.3,1),height .68s cubic-bezier(.16,1,.3,1),border-radius .62s cubic-bezier(.16,1,.3,1),box-shadow .42s ease,background .42s ease;user-select:none;outline:none;will-change:width,height}
-#mwi.is-open{border-radius:25px;border-color:color-mix(in srgb,var(--mw-accent) 45%,rgba(255,255,255,.2));box-shadow:0 0 0 1px rgba(255,255,255,.07),0 24px 72px rgba(0,0,0,.62),0 0 48px -10px var(--mw-accent),inset 0 1px 0 rgba(255,255,255,.14)}
+/* compact live indicators + correctly measured expanded Dynamic Island */
+#mwi{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:2147483001;width:210px;height:48px;max-width:calc(100vw - 24px);overflow:hidden;cursor:pointer;background:linear-gradient(145deg,rgba(25,26,43,.985),rgba(4,5,13,.99));color:#fff;border:1px solid rgba(206,203,255,.2);border-radius:26px;font:600 12px/1 "Manrope Variable",Manrope,system-ui,sans-serif;box-shadow:0 0 0 1px rgba(255,255,255,.035),0 12px 38px rgba(0,0,0,.48),0 0 28px -8px var(--mw-accent);transition:width .56s cubic-bezier(.16,1,.3,1),height .56s cubic-bezier(.16,1,.3,1),border-radius .52s cubic-bezier(.16,1,.3,1),box-shadow .4s ease;user-select:none;outline:none;will-change:width,height}
+#mwi.is-open{border-radius:27px;border-color:color-mix(in srgb,var(--mw-accent) 48%,rgba(255,255,255,.2));box-shadow:0 0 0 1px rgba(255,255,255,.07),0 24px 72px rgba(0,0,0,.62),0 0 48px -10px var(--mw-accent),inset 0 1px 0 rgba(255,255,255,.14)}
 #mwi:focus-visible{box-shadow:0 0 0 2px var(--mw-accent),0 18px 48px rgba(0,0,0,.58)}
-.ly{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;filter:blur(7px);transform:translate3d(0,5px,0) scale(.97);transition:opacity .26s ease,filter .34s ease,transform .56s cubic-bezier(.16,1,.3,1);pointer-events:none}
+.ly{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;filter:blur(7px);transform:translate3d(0,5px,0) scale(.97);transition:opacity .25s ease,filter .32s ease,transform .48s cubic-bezier(.16,1,.3,1);pointer-events:none}
 .ly.on{opacity:1;filter:none;transform:translate3d(0,0,0) scale(1)}
-#mwc{gap:11px;padding:0 17px;white-space:nowrap}
-.mini-time{font-size:13px;font-weight:850;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
-.mini-sep{width:1px;height:16px;background:rgba(255,255,255,.17)}
-.mini-period{max-width:84px;overflow:hidden;text-overflow:ellipsis;color:#c8c6e2;font-size:10px;font-weight:800}
-.mini-status{flex:none;width:7px;height:7px;border-radius:50%;background:var(--mw-accent);box-shadow:0 0 11px var(--mw-accent)}
-#mwe{width:min(348px,calc(100vw - 36px));padding:16px 18px 15px;display:flex;flex-direction:column;align-items:stretch;justify-content:center;gap:10px;white-space:normal}
+#mwc{gap:10px;padding:0 16px;white-space:nowrap}
+.mini-time{font-size:13px;font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:-.025em}
+.mini-sep{width:1px;height:16px;flex:none;background:rgba(255,255,255,.18)}
+.mini-meta{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-width:0;color:#f1f0ff;font-size:10px;font-weight:850;font-variant-numeric:tabular-nums}
+.mini-meta svg{display:block;flex:none}
+.mini-weather svg{width:16px;height:16px}
+.mini-battery svg{width:24px;height:12px}
+#mwe{position:absolute;top:0;left:0;right:auto;bottom:auto;inset:auto;width:min(390px,calc(100vw - 24px));max-height:calc(100vh - 24px);padding:0;display:block;white-space:normal;overflow:visible}
+.di-content{position:relative;display:flex;flex-direction:column;gap:11px;padding:17px 18px 16px;min-width:0;transition:opacity .2s ease,filter .2s ease,transform .25s ease}
 .di-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .di-kicker{display:flex;align-items:center;gap:7px;color:#b9b5d9;font-size:9px;font-weight:950;letter-spacing:.16em;text-transform:uppercase}
 .di-live{width:6px;height:6px;border-radius:50%;background:#39e8c1;box-shadow:0 0 11px rgba(57,232,193,.88);animation:di-live-pulse 1.8s ease-in-out infinite}
 @keyframes di-live-pulse{50%{opacity:.45;box-shadow:0 0 3px rgba(57,232,193,.5)}}
 .di-time{color:#a8aac4;font-size:10px;font-weight:750;font-variant-numeric:tabular-nums}
+.di-metrics{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:9px}
+.di-metric{display:flex;align-items:center;gap:9px;min-width:0;min-height:51px;padding:8px 10px;border:1px solid rgba(255,255,255,.085);border-radius:15px;background:linear-gradient(145deg,rgba(255,255,255,.075),rgba(255,255,255,.035));box-shadow:inset 0 1px 0 rgba(255,255,255,.055)}
+.di-metric-icon{display:grid;place-items:center;flex:none;width:30px;height:30px}
+.di-metric-icon svg{display:block}
+.di-metric-text{display:flex;flex-direction:column;gap:3px;min-width:0}
+.di-metric-value{color:#f7f5ff;font-size:17px;font-weight:900;letter-spacing:-.04em;line-height:1}
+.di-metric-label{overflow:hidden;color:#a3a6c0;font-size:8px;font-weight:750;line-height:1.25;text-overflow:ellipsis;white-space:nowrap}
 .di-current{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
 .di-current-main{min-width:0;display:flex;flex-direction:column;gap:5px}
 .di-label{color:#8f93b1;font-size:8px;font-weight:900;letter-spacing:.13em;text-transform:uppercase}
@@ -65,27 +75,50 @@ form{width:min(580px,92vw)}
 .di-note{min-height:12px;color:#8189a8;font-size:9px;line-height:1.45}
 #mwi.out .di-live{background:#a2a8c4;box-shadow:0 0 8px rgba(162,168,196,.5);animation:none}
 #mwi.out .di-progress{opacity:.28}
-@media(prefers-reduced-motion:reduce){#mwi,.ly,.di-progress,.di-live,.di-shine{transition:none!important;animation:none!important}}
+.di-loader{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;min-height:190px;border-radius:27px;background:linear-gradient(145deg,rgba(24,25,43,.985),rgba(5,6,16,.99));opacity:0;filter:blur(7px);transform:scale(.97);pointer-events:none;transition:opacity .24s ease,filter .32s ease,transform .42s cubic-bezier(.16,1,.3,1)}
+#mwi.is-loading .di-content{opacity:0;filter:blur(6px);transform:scale(.985)}
+#mwi.is-loading .di-loader{opacity:1;filter:none;transform:scale(1)}
+.di-loader-orbit{position:relative;width:42px;height:42px;border:1px solid rgba(255,255,255,.12);border-radius:50%;box-shadow:0 0 26px color-mix(in srgb,var(--mw-accent) 30%,transparent),inset 0 0 14px rgba(255,255,255,.045);animation:di-orbit 2.6s linear infinite}
+.di-loader-orbit:before{content:"";position:absolute;inset:6px;border:1px solid color-mix(in srgb,var(--mw-accent) 60%,transparent);border-left-color:transparent;border-radius:50%;animation:di-orbit 1.25s linear infinite reverse}
+.di-loader-orbit:after{content:"";position:absolute;left:17px;top:-3px;width:7px;height:7px;border-radius:50%;background:#fff;box-shadow:0 0 13px var(--mw-accent),0 0 24px var(--mw-accent)}
+.di-loader-copy{display:flex;flex-direction:column;align-items:center;gap:4px}
+.di-loader-copy strong{color:#f4f2ff;font-size:11px;font-weight:900;letter-spacing:.02em}
+.di-loader-copy span{color:#8e93b4;font-size:8px;font-weight:750;letter-spacing:.13em;text-transform:uppercase}
+.di-loader-bar{position:relative;width:118px;height:3px;overflow:hidden;border-radius:10px;background:rgba(255,255,255,.1)}
+.di-loader-bar span{position:absolute;inset:0 auto 0 -45%;width:42%;border-radius:10px;background:linear-gradient(90deg,transparent,var(--mw-accent),#8ce9dc,transparent);animation:di-loader-sweep 1.05s cubic-bezier(.45,0,.55,1) infinite}
+@keyframes di-orbit{to{transform:rotate(360deg)}}
+@keyframes di-loader-sweep{to{transform:translateX(350%)}}
+@media(prefers-reduced-motion:reduce){#mwi,.ly,.di-content,.di-loader,.di-progress,.di-live,.di-shine,.di-loader-orbit,.di-loader-bar span{transition:none!important;animation:none!important}}
 @media (max-width:700px){.ver{right:-8px;top:-34px}}
 @media (prefers-reduced-motion:reduce){*{transition-duration:.01ms!important}}
 </style>
 </head>
 <body>
 <canvas id="grid"></canvas>
-<div id="mwi" role="button" tabindex="0" aria-label="School status. Expand current period and schedule." aria-controls="mwe" aria-expanded="false">
+<div id="mwi" role="button" tabindex="0" aria-label="Expand time, weather, battery and school status" aria-controls="mwe" aria-expanded="false">
   <div id="mwc" class="ly on">
-    <span class="mini-status"></span><span class="mini-time" id="ct">--:--</span>
-    <span class="mini-sep"></span><span class="mini-period" id="miniPeriod">School status</span>
+    <span class="mini-time" id="ct">--:--</span>
+    <span class="mini-sep"></span>
+    <span id="cw" class="mini-meta mini-weather"></span>
+    <span id="cb" class="mini-meta mini-battery"></span>
   </div>
   <div id="mwe" class="ly">
-    <div class="di-head"><span class="di-kicker"><i class="di-live"></i><span id="schoolBadge">LIVE SCHOOL STATUS</span></span><time class="di-time" id="et">--:--</time></div>
-    <div class="di-current">
-      <div class="di-current-main"><span class="di-label">CURRENT PERIOD</span><strong class="di-period" id="periodTitle">Checking schedule…</strong></div>
-      <span class="di-left" id="periodLeft">--</span>
+    <div class="di-content">
+      <div class="di-head"><span class="di-kicker"><i class="di-live"></i><span id="schoolBadge">LIVE SCHOOL STATUS</span></span><time class="di-time" id="et">--:--</time></div>
+      <div class="di-metrics"><div id="ew" class="di-metric"></div><div id="eb" class="di-metric"></div></div>
+      <div class="di-current">
+        <div class="di-current-main"><span class="di-label">CURRENT PERIOD</span><strong class="di-period" id="periodTitle">Checking schedule…</strong></div>
+        <span class="di-left" id="periodLeft">--</span>
+      </div>
+      <div class="di-progress-wrap"><div class="di-progress" id="periodProgress"></div><div class="di-shine"></div></div>
+      <div class="di-footer"><span id="periodDetail">School schedule</span><span class="di-next" id="nextPeriod"></span></div>
+      <div class="di-note" id="diNote">School status updates automatically.</div>
     </div>
-    <div class="di-progress-wrap"><div class="di-progress" id="periodProgress"></div><div class="di-shine"></div></div>
-    <div class="di-footer"><span id="periodDetail">School schedule</span><span class="di-next" id="nextPeriod"></span></div>
-    <div class="di-note" id="diNote">School status updates automatically.</div>
+    <div class="di-loader" aria-hidden="true">
+      <div class="di-loader-orbit"></div>
+      <div class="di-loader-copy"><strong>Refreshing live status</strong><span>Clock · weather · battery</span></div>
+      <div class="di-loader-bar"><span></span></div>
+    </div>
   </div>
 </div>
 <main>
@@ -103,7 +136,7 @@ form{width:min(580px,92vw)}
 (function(){
 var $=function(i){return document.getElementById(i)};
 function hex(h){h=(h||"").trim().replace("#","");if(h.length!==6)return[143,124,255];return[parseInt(h.substr(0,2),16),parseInt(h.substr(2,2),16),parseInt(h.substr(4,2),16)]}
-var rgb=hex(getComputedStyle(document.documentElement).getPropertyValue("--mw-accent"));
+var S={bat:null,wx:null},rgb=hex(getComputedStyle(document.documentElement).getPropertyValue("--mw-accent")),prevCh=null;
 function send(m){parent.postMessage(m,"*")}
 
 /* search + bookmarks */
@@ -210,8 +243,8 @@ if(ctx){
 
 /* school-status dynamic island */
 var I=$("mwi"),C=$("mwc"),E=$("mwe"),open=false,pinned=false,hover=false;
-var autoOpenUntil=0,autoCloseTimer=0,lastAutoSlot=-1;
-var timeEl=$("ct"),expandedTimeEl=$("et"),miniPeriodEl=$("miniPeriod");
+var autoOpenUntil=0,autoCloseTimer=0,lastAutoSlot=-1,loadingTimer=0;
+var timeEl=$("ct"),expandedTimeEl=$("et");
 var badgeEl=$("schoolBadge"),periodEl=$("periodTitle"),leftEl=$("periodLeft");
 var progressEl=$("periodProgress"),detailEl=$("periodDetail"),nextEl=$("nextPeriod"),noteEl=$("diNote");
 
@@ -236,24 +269,41 @@ function remainingString(minutes){
   if(value<1)return "less than 1 min";
   return value+(value===1?" min":" mins");
 }
+function startIslandLoading(){
+  I.classList.add("is-loading");
+  window.clearTimeout(loadingTimer);
+  loadingTimer=window.setTimeout(function(){
+    I.classList.remove("is-loading");
+    fitIsland();
+  },1050);
+  send({type:"mw-refresh-live"});
+}
 function setOpen(value){
-  open=!!value;
+  var next=!!value,changed=next!==open;
+  open=next;
   I.classList.toggle("is-open",open);
   I.setAttribute("aria-expanded",open?"true":"false");
   C.classList.toggle("on",!open);
   E.classList.toggle("on",open);
+  if(open&&changed)startIslandLoading();
+  if(!open){
+    window.clearTimeout(loadingTimer);
+    I.classList.remove("is-loading");
+  }
   fitIsland();
 }
 function fitIsland(){
   requestAnimationFrame(function(){
     if(open){
-      var width=Math.min(Math.max(296,E.scrollWidth+2),innerWidth-24);
-      var height=Math.min(E.scrollHeight,innerHeight-26);
+      var width=Math.min(390,Math.max(220,innerWidth-24));
+      E.style.width=width+"px";
+      var height=Math.ceil(E.getBoundingClientRect().height);
+      height=Math.min(Math.max(190,height),innerHeight-24);
       I.style.width=width+"px";
       I.style.height=height+"px";
-      I.style.borderRadius="25px";
+      I.style.borderRadius="27px";
     }else{
-      I.style.width="176px";
+      I.style.width="210px";
       I.style.height="48px";
       I.style.borderRadius="26px";
     }
@@ -332,11 +382,52 @@ function updateSchoolStatus(){
   detailEl.textContent=detail;
   nextEl.textContent=next;
   noteEl.textContent=note;
-  miniPeriodEl.textContent=mini;
   progressEl.style.width=percent.toFixed(2)+"%";
   I.classList.toggle("out",off);
   fitIsland();
 }
+
+function weatherKind(code){
+  if(code===0)return"clear";
+  if(code<=3)return"cloud";
+  if(code<=48)return"fog";
+  if(code<70||(code>=80&&code<=82))return"rain";
+  if(code<80||code===85||code===86)return"snow";
+  return"storm";
+}
+var WEATHER_NAMES={clear:"Clear",cloud:"Cloudy",fog:"Fog",rain:"Rain",snow:"Snow",storm:"Thunderstorms"};
+function weatherSvg(w,size){
+  var k=weatherKind(Number(w.code)),cloud='<path d="M7 18a4 4 0 0 1-.6-8A5.5 5.5 0 0 1 17 11.3 3.4 3.4 0 0 1 17 18z" fill="#cbd5e1"/>',shape;
+  if(k==="clear")shape=w.day?'<circle cx="12" cy="12" r="4.5" fill="#fbbf24"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1" stroke="#fbbf24" stroke-width="1.7" stroke-linecap="round"/>':'<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" fill="#c7d2fe"/>';
+  else if(k==="cloud")shape=cloud;
+  else if(k==="fog")shape=cloud+'<path d="M6 20.5h12" stroke="#94a3b8" stroke-width="1.7" stroke-linecap="round"/>';
+  else if(k==="rain")shape=cloud+'<path d="M8 19.5l-1 2.5M12 19.5l-1 2.5M16 19.5l-1 2.5" stroke="#60a5fa" stroke-width="1.7" stroke-linecap="round"/>';
+  else if(k==="snow")shape=cloud+'<circle cx="8" cy="21" r="1.1" fill="#e0f2fe"/><circle cx="12" cy="21" r="1.1" fill="#e0f2fe"/><circle cx="16" cy="21" r="1.1" fill="#e0f2fe"/>';
+  else shape=cloud+'<path d="M12.5 17.5 10 21h2.6l-.8 2.5" stroke="#facc15" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"/>';
+  return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 24 24" aria-hidden="true">'+shape+'</svg>';
+}
+function batterySvg(b,scale){
+  var level=Math.max(0,Math.min(100,Number(b.level)||0));
+  var color=b.charging?"#30d158":level<=20?"#ff453a":"#fff";
+  var fill=18*level/100;
+  return '<svg width="'+(25*scale)+'" height="'+(12*scale)+'" viewBox="0 0 25 12" aria-hidden="true"><rect x=".5" y=".5" width="21" height="11" rx="3.5" fill="none" stroke="#fff" opacity=".48"/><rect x="2" y="2" width="'+fill+'" height="8" rx="2" fill="'+color+'"/><rect x="23" y="4" width="1.8" height="4" rx=".9" fill="#fff" opacity=".45"/>'+(b.charging?'<path d="M12.6 1.8 8.4 6.5h2.7l-.7 3.7 4.2-4.8h-2.7z" fill="#fff" stroke="#000" stroke-width=".5" stroke-linejoin="round"/>':'')+'</svg>';
+}
+function safeText(value){
+  return String(value==null?"":value).replace(/[&<>"']/g,function(c){return({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]});
+}
+function renderLiveData(){
+  var w=S.wx,b=S.bat,weatherKindName=w?weatherKind(Number(w.code)):"";
+  $("cw").innerHTML=w?weatherSvg(w,16)+'<b>'+Number(w.temp)+'°</b>':"";
+  $("cb").innerHTML=b?batterySvg(b,.95)+'<b>'+Math.round(b.level)+'%</b>':"";
+  $("ew").innerHTML=w
+    ?'<span class="di-metric-icon">'+weatherSvg(w,29)+'</span><span class="di-metric-text"><b class="di-metric-value">'+Number(w.temp)+'°</b><small class="di-metric-label">'+WEATHER_NAMES[weatherKindName]+(w.city?' · '+safeText(w.city):'')+'</small></span>'
+    :'<span class="di-metric-icon">'+weatherSvg({code:3,day:true},29)+'</span><span class="di-metric-text"><b class="di-metric-value">--°</b><small class="di-metric-label">Weather unavailable</small></span>';
+  $("eb").innerHTML=b
+    ?'<span class="di-metric-icon">'+batterySvg(b,1.45)+'</span><span class="di-metric-text"><b class="di-metric-value">'+Math.round(b.level)+'%</b><small class="di-metric-label">'+(b.charging?'Charging':'On battery')+'</small></span>'
+    :'<span class="di-metric-icon">'+batterySvg({level:0,charging:false},1.45)+'</span><span class="di-metric-text"><b class="di-metric-value">--</b><small class="di-metric-label">Battery status unavailable</small></span>';
+  fitIsland();
+}
+
 function showAutomaticStatus(){
   var slot=Math.floor(Date.now()/(10*60*1000));
   if(slot===lastAutoSlot)return;
@@ -389,9 +480,11 @@ window.setTimeout(function(){
 },900);
 
 /* state from the shell: theme and bookmarks */
-addEventListener("message",function(e){var d=e.data;if(!d||d.type!=="mw-state")return;
-if(d.vars){for(var k in d.vars)document.documentElement.style.setProperty(k,d.vars[k]);rgb=hex(d.vars["--mw-accent"])}
-chips(d.bm);renderGrid(performance.now());fitIsland()});
+addEventListener("message",function(e){var d=e.data;if(!d)return;
+if(d.type==="mw-state"){
+  if(d.vars){for(var k in d.vars)document.documentElement.style.setProperty(k,d.vars[k]);rgb=hex(d.vars["--mw-accent"])}
+  S.bat=d.bat||null;S.wx=d.wx||null;chips(d.bm);renderGrid(performance.now());renderLiveData();
+}});
 send({type:"mw-ready"});
 })();
 </script>
