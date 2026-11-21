@@ -367,10 +367,8 @@ const SETTINGS_CSS = `
 .mws .d{width:22px;height:22px;border-radius:50%;flex:none;border:1px solid rgba(255,255,255,.22);box-shadow:inset 0 1px 1px rgba(255,255,255,.45),0 2px 8px rgba(0,0,0,.4)}
 .mws .row{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
 .mws .row button{justify-content:center;text-align:center}
-.mws .mws-tab-form{display:grid;grid-template-columns:1fr 74px;gap:8px}
-.mws .mws-tab-form label{display:flex;flex-direction:column;gap:6px;color:#b8b8ce;font-size:11px;font-weight:700}
-.mws .mws-tab-form label:first-child{grid-column:1/2}
-.mws .mws-tab-form label:nth-child(2){grid-column:2/3}
+.mws .mws-tab-form{display:grid;grid-template-columns:minmax(0,1fr);gap:9px}
+.mws .mws-tab-form label{display:flex;flex-direction:column;gap:6px;color:#b8b8ce;font-size:11px;font-weight:700;grid-column:1/-1;min-width:0}
 .mws input{box-sizing:border-box;width:100%;height:37px;min-width:0;padding:0 10px;border:1px solid rgba(255,255,255,.15);border-radius:11px;background:rgba(4,5,13,.72);color:#fff;font:600 13px system-ui,sans-serif;outline:0}
 .mws input:focus{border-color:var(--mw-accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--mw-accent) 25%,transparent)}
 .mws .mws-tab-form button{grid-column:1/-1;justify-content:center;background:color-mix(in srgb,var(--mw-accent) 24%,rgba(255,255,255,.08));border-color:color-mix(in srgb,var(--mw-accent) 55%,transparent);padding:10px}

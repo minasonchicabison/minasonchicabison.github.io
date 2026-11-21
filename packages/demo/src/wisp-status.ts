@@ -226,7 +226,13 @@ export function connectWisp(input: string, timeoutMs = 6000): Promise<boolean> {
 					setState(url, "connected");
 					resolve(true);
 				} else if (type === 0x04) {
-					fail("Wisp server rejected the connection");
+					if (settled) {
+						sockets.delete(url);
+						setState(url, "failed", "Wisp server closed the connection");
+						try { ws.close(); } catch {}
+					} else {
+						fail("Wisp server rejected the connection");
+					}
 				} else if (type === 0x05) {
 					fail("Server sent Wisp v2 INFO instead of the v1 handshake");
 				}
