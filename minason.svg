@@ -1,7 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%">
-  <foreignObject width="100%" height="100%">
-    <iframe xmlns="http://www.w3.org/1999/xhtml"
-            src="https://minasonchicabison.github.io/"
-            style="border:0;width:100vw;height:100vh;position:fixed;top:0;left:0"></iframe>
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="100%" height="100%" viewBox="0 0 100 100"
+     preserveAspectRatio="none"
+     style="display:block;background:#0a0a12">
+  <foreignObject x="0" y="0" width="100" height="100">
+    <div xmlns="http://www.w3.org/1999/xhtml"
+         style="display:block;width:100%;height:100%;min-height:100vh;margin:0;overflow:hidden;background:#0a0a12">
+      <iframe
+        title="Minason Web"
+        src="https://minasonchicabison.github.io/"
+        width="100%" height="100%"
+        referrerpolicy="strict-origin-when-cross-origin"
+        style="display:block;width:100%;height:100%;min-height:100vh;margin:0;padding:0;border:0;background:#0a0a12">
+      </iframe>
+    </div>
   </foreignObject>
 </svg>
