@@ -132,19 +132,7 @@ export function removeCustomWispUrl(url: string) {
 	publish();
 }
 
-function encodePacket(type: number, payload: Uint8Array): Uint8Array {
-	const packet = new Uint8Array(5 + payload.length);
-	packet[0] = type;
-	new DataView(packet.buffer).setUint32(1, 0, true);
-	packet.set(payload, 5);
-	return packet;
-}
-
-/**
- * Complete the Wisp handshake, not just the underlying WebSocket upgrade.
- * The live socket is kept open so the status indicator can notice disconnects.
- */
-export function connectWisp(input: string, timeoutMs = 5000): Promise<boolean> {
+export function connectWisp(input: string, timeoutMs = 6000): Promise<boolean> {
 	const url = normalizeWispUrl(input);
 	if (!url) return Promise.resolve(false);
 
@@ -155,6 +143,7 @@ export function connectWisp(input: string, timeoutMs = 5000): Promise<boolean> {
 	) {
 		return Promise.resolve(true);
 	}
+
 	const current = pending.get(url);
 	if (current) return current;
 
@@ -162,115 +151,106 @@ export function connectWisp(input: string, timeoutMs = 5000): Promise<boolean> {
 
 	const task = new Promise<boolean>((resolve) => {
 		let settled = false;
+		let socket: WebSocket | null = null;
+		let timer = 0;
+
+		const cleanupAttempt = () => {
+			window.clearTimeout(timer);
+			if (socket) {
+				socket.onmessage = null;
+				socket.onerror = null;
+				socket.onclose = null;
+			}
+		};
 
 		const fail = (message: string) => {
 			if (settled) return;
 			settled = true;
+			cleanupAttempt();
+			try {
+				socket?.close();
+			} catch {}
 			setState(url, "failed", message);
 			resolve(false);
 		};
 
-		const attempt = (useV2: boolean) => {
-			if (settled) return;
-			let socket: WebSocket;
-			try {
-				socket = useV2
-					? new WebSocket(url, ["wisp-v2"])
-					: new WebSocket(url);
-			} catch (error) {
-				if (useV2) attempt(false);
-				else fail(error instanceof Error ? error.message : "Connection failed");
-				return;
-			}
-
-			let attemptEnded = false;
-			const retryOrFail = (message: string) => {
-				if (attemptEnded || settled) return;
-				attemptEnded = true;
-				window.clearTimeout(timer);
-				socket.onmessage = null;
-				socket.onerror = null;
-				socket.onclose = null;
-				try {
-					socket.close();
-				} catch {}
-				if (useV2) attempt(false);
-				else fail(message);
-			};
-
-			const timer = window.setTimeout(
-				() => retryOrFail("Wisp handshake timed out"),
-				timeoutMs
-			);
-
+		try {
+			// No subprotocol means Wisp v1. Wisp v2 servers are required to
+			// continue accepting v1 clients, avoiding a fragile custom INFO exchange.
+			socket = new WebSocket(url);
 			socket.binaryType = "arraybuffer";
-			socket.onmessage = async (event: MessageEvent) => {
-				try {
-					let bytes: Uint8Array;
-					if (event.data instanceof ArrayBuffer) {
-						bytes = new Uint8Array(event.data);
-					} else if (event.data instanceof Blob) {
-						bytes = new Uint8Array(await event.data.arrayBuffer());
-					} else {
-						return;
-					}
-					if (bytes.length < 5) return;
+		} catch (error) {
+			fail(error instanceof Error ? error.message : "WebSocket could not be created");
+			return;
+		}
 
-					const view = new DataView(
-						bytes.buffer,
-						bytes.byteOffset,
-						bytes.byteLength
-					);
-					const type = view.getUint8(0);
-					const streamId = view.getUint32(1, true);
-					if (streamId !== 0) return;
+		const ws = socket;
+		if (!ws) {
+			fail("WebSocket connection could not be created");
+			return;
+		}
 
-					// Wisp v2: respond to the server INFO packet with our INFO packet.
-					if (type === 0x05 && useV2) {
-						const extensions = new Uint8Array([
-							0x01, 0, 0, 0, 0, // UDP extension
-							0x04, 0, 0, 0, 0, // MOTD extension
-						]);
-						const payload = new Uint8Array(2 + extensions.length);
-						payload[0] = 2;
-						payload[1] = 0;
-						payload.set(extensions, 2);
-						socket.send(encodePacket(0x05, payload));
-						return;
-					}
+		timer = window.setTimeout(
+			() => fail("Wisp handshake timed out"),
+			timeoutMs
+		);
 
-					// CONTINUE on stream 0 means the Wisp protocol handshake completed.
-					if (type === 0x03) {
-						if (attemptEnded || settled) return;
-						attemptEnded = true;
-						window.clearTimeout(timer);
-						settled = true;
-						sockets.set(url, socket);
-						setState(url, "connected");
-						resolve(true);
-					} else if (type === 0x04) {
-						retryOrFail("Wisp server rejected the connection");
-					}
-				} catch (error) {
-					retryOrFail(
-						error instanceof Error ? error.message : "Invalid Wisp response"
-					);
+		ws.onmessage = async (event: MessageEvent) => {
+			try {
+				let bytes: Uint8Array;
+				if (event.data instanceof ArrayBuffer) {
+					bytes = new Uint8Array(event.data);
+				} else if (event.data instanceof Blob) {
+					bytes = new Uint8Array(await event.data.arrayBuffer());
+				} else {
+					return;
 				}
-			};
 
-			socket.onerror = () =>
-				retryOrFail("WebSocket connection failed");
-			socket.onclose = () => {
-				if (!settled) {
-					retryOrFail("Wisp server closed before completing its handshake");
-				} else if (sockets.get(url) === socket) {
-					sockets.delete(url);
-					setState(url, "failed", "Wisp connection closed");
+				// Wisp packets have a 5-byte header. CONTINUE carries a
+				// 4-byte receive-window value and is the v1 ready signal.
+				if (bytes.length < 9) return;
+				const view = new DataView(
+					bytes.buffer,
+					bytes.byteOffset,
+					bytes.byteLength
+				);
+				const type = view.getUint8(0);
+				const streamId = view.getUint32(1, true);
+				if (streamId !== 0) return;
+
+				if (type === 0x03) {
+					if (settled || ws.readyState !== WebSocket.OPEN) return;
+					settled = true;
+					window.clearTimeout(timer);
+					sockets.set(url, ws);
+					setState(url, "connected");
+					resolve(true);
+				} else if (type === 0x04) {
+					fail("Wisp server rejected the connection");
+				} else if (type === 0x05) {
+					fail("Server sent Wisp v2 INFO instead of the v1 handshake");
 				}
-			};
+			} catch (error) {
+				fail(error instanceof Error ? error.message : "Invalid Wisp response");
+			}
 		};
 
-		attempt(true);
+		ws.onerror = () => {
+			if (!settled) fail("WebSocket connection failed");
+			else if (ws.readyState !== WebSocket.OPEN) {
+				sockets.delete(url);
+				setState(url, "failed", "Wisp connection error");
+			}
+		};
+
+		ws.onclose = () => {
+			if (!settled) {
+				fail("Wisp server closed before completing its handshake");
+			} else if (sockets.get(url) === socket) {
+				sockets.delete(url);
+				setState(url, "failed", "Wisp connection closed");
+			}
+		};
 	});
 
 	pending.set(url, task);

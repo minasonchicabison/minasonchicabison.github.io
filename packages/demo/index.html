@@ -2,7 +2,7 @@
 <html lang="en">
 	<head>
 		<meta charset="UTF-8" />
-		<link rel="icon" type="image/svg+xml" href="/icon.png" />
+		<link id="mw-app-favicon" rel="icon" type="image/png" href="/icon.png" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Minason Web v2</title>
 
@@ -139,6 +139,7 @@
 				background: linear-gradient(180deg, color-mix(in srgb, var(--mw-accent) 30%, transparent), var(--mw-glass));
 			}
 			.mwt-icon { width: 18px; height: 18px; display: grid; place-items: center; flex: none; border-radius: 6px; font-size: 14px; line-height: 1; background: color-mix(in srgb, var(--mw-accent) 13%, transparent); }
+			.mwt-icon img { display: block; width: 18px; height: 18px; object-fit: contain; border-radius: 4px; }
 			.mwt-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 			.mwt-x, .mwt-add {
 				border: 0; background: transparent; color: var(--mw-mut); cursor: pointer; border-radius: 50%;

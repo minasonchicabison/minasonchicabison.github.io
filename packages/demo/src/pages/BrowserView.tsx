@@ -3,7 +3,7 @@ import {
 	CatchEscapedLinksPlugin,
 	UrlWatcherPlugin,
 } from "@mercuryworkshop/scramjet-utils";
-import { cachePlugin, controller } from "..";
+import { cachePlugin, controller, getTransport } from "..";
 import homepage from "./homepage.html?raw";
 import type { Frame } from "@mercuryworkshop/scramjet-controller";
 import { demoSettingsStore } from "../store";
@@ -85,16 +85,34 @@ export function tabTitleFor(url: string, rawTitle?: string): string {
 }
 
 
-type TabAppearance = { name?: string; icon?: string };
+type TabAppearance = { name?: string; favicon?: string; icon?: string };
 const TAB_APPEARANCE_KEY = "mw-tab-appearance";
 
 function tabAppearanceKey(url: string): string {
 	if (!url || url.startsWith("data:")) return "__newtab__";
 	try {
-		return new URL(url).hostname.toLowerCase();
+		const parsed = new URL(url);
+		return parsed.origin + parsed.pathname;
 	} catch {
 		return "__newtab__";
 	}
+}
+
+function normalizeFavicon(input: string, pageUrl: string): string | null {
+	const value = input.trim();
+	if (!value) return "";
+	if (/^data:image\//i.test(value)) return value;
+	try {
+		const parsed = new URL(value, pageUrl || location.origin);
+		if (parsed.protocol === "https:" || parsed.protocol === "http:") {
+			return parsed.href;
+		}
+	} catch {}
+	return null;
+}
+
+function isFaviconImage(value: string): boolean {
+	return /^https?:\/\//i.test(value) || /^data:image\//i.test(value);
 }
 
 function loadTabAppearances(): Record<string, TabAppearance> {
@@ -116,7 +134,8 @@ function getTabAppearance(url: string): TabAppearance {
 function applyTabAppearance(tab: Tab) {
 	const saved = getTabAppearance(tab.url);
 	tab.title = saved.name?.trim() || tabTitleFor(tab.url);
-	tab.icon = saved.icon?.trim() || "🌐";
+	const oldIcon = saved.icon?.trim() || "";
+	tab.icon = saved.favicon?.trim() || (isFaviconImage(oldIcon) ? oldIcon : "") || "🌐";
 }
 
 /* ---------- bookmarks ---------- */
@@ -138,98 +157,6 @@ function addBookmark(input: string) {
 	const l = loadBm();
 	if (l.some((b) => b.u === u)) return;
 	saveBm([...l, { t: tabTitleFor(u), u }]);
-}
-
-/* ---------- live data for the dynamic island ---------- */
-// Read here (the homepage iframe is a data: URL and can't) and posted in.
-const svc = {
-	bat: null as null | { level: number; charging: boolean },
-	wx: null as null | Record<string, unknown>,
-	started: false,
-};
-
-async function startServices() {
-	if (svc.started) return;
-	svc.started = true;
-	try {
-		const b = await (navigator as any).getBattery?.();
-		if (b) {
-			const update = () => {
-				svc.bat = { level: Math.round(b.level * 100), charging: !!b.charging };
-				pushAll();
-			};
-			update();
-			b.addEventListener("levelchange", update);
-			b.addEventListener("chargingchange", update);
-		}
-	} catch {}
-
-	let loc: { latitude: number; longitude: number; city?: string } | null = null;
-	const loadWeather = async () => {
-		try {
-			loc ??= await (await fetch("https://ipapi.co/json/")).json();
-			const f = /^en-US/i.test(navigator.language);
-			const r = await (
-				await fetch(
-					`https://api.open-meteo.com/v1/forecast?latitude=${loc!.latitude}&longitude=${loc!.longitude}&current=temperature_2m,weather_code,is_day&temperature_unit=${f ? "fahrenheit" : "celsius"}`
-				)
-			).json();
-			svc.wx = {
-				temp: Math.round(r.current.temperature_2m),
-				code: r.current.weather_code,
-				day: !!r.current.is_day,
-				city: loc!.city ?? "",
-			};
-			pushAll();
-		} catch {}
-	};
-	loadWeather();
-	setInterval(loadWeather, 15 * 60 * 1000);
-}
-
-
-const WELCOME_MESSAGES = [
-	"Your tabs called. They want a union.",
-	"Powered by questionable amounts of caffeine.",
-	"Browsing at the speed of mild inconvenience.",
-	"Another day, another 47 open tabs.",
-	"Your search history is between you and the pixels.",
-	"Welcome back, professional button clicker.",
-	"Loading vibes… please do not refresh the vibes.",
-	"Internet explorer? We barely know her.",
-	"Now with 12% more unnecessary gradients.",
-	"Somewhere, a server just sneezed.",
-	"Go forth and open suspiciously many tabs.",
-	"Your curiosity has entered the chat.",
-	"Built different. Compiled similarly.",
-	"Less spinning wheel, more winning feel.",
-	"Today's forecast: scattered tabs.",
-	"Ctrl+T is a lifestyle.",
-	"Be right back, negotiating with the internet.",
-	"Searching for the meaning of the loading bar.",
-	"One small click for you, one giant request for the server.",
-	"Please keep all hands inside the browser.",
-	"Fresh tab. Same chaotic energy.",
-	"Your bookmarks are judging your life choices.",
-	"404 problems, but a vibe ain't one.",
-	"Welcome to the information superhighway. Mind the potholes.",
-	"Tabs are temporary. Screenshots are forever.",
-	"Maximum curiosity. Minimum context.",
-	"Currently orbiting the world wide web.",
-	"May your pages load and your snacks be plentiful.",
-	"Shiny pixels, questionable decisions.",
-	"Congratulations, you found the internet again."
-];
-
-function escapeHtml(value: string): string {
-	const entities: Record<string, string> = {
-		"&": "&amp;",
-		"<": "&lt;",
-		">": "&gt;",
-		'"': "&quot;",
-		"'": "&#39;",
-	};
-	return value.replace(/[&<>"']/g, (char) => entities[char] ?? char);
 }
 
 const themeVars = (): Record<string, string> =>
@@ -266,7 +193,7 @@ const activeTab = () => tabs.find((t) => t.id === activeId);
 
 function pushTo(t: Tab) {
 	t.iframe.contentWindow?.postMessage(
-		{ type: "mw-state", vars: themeVars(), bat: svc.bat, wx: svc.wx, bm: loadBm() },
+		{ type: "mw-state", vars: themeVars(), bm: loadBm() },
 		"*"
 	);
 }
@@ -283,7 +210,17 @@ function renderStrip() {
 		d.className = "mwt" + (t.id === activeId ? " on" : "");
 		d.innerHTML =
 			'<span class="mwt-icon"></span><span class="mwt-title"></span><button type="button" class="mwt-x" aria-label="Close tab">\u00d7</button>';
-		d.querySelector(".mwt-icon")!.textContent = t.icon || "🌐";
+		const icon = d.querySelector<HTMLElement>(".mwt-icon")!;
+		if (isFaviconImage(t.icon)) {
+			const image = document.createElement("img");
+			image.src = t.icon;
+			image.alt = "";
+			image.referrerPolicy = "no-referrer";
+			image.onerror = () => { icon.textContent = "🌐"; };
+			icon.appendChild(image);
+		} else {
+			icon.textContent = t.icon || "🌐";
+		}
 		d.querySelector(".mwt-title")!.textContent = t.title;
 		d.onclick = () => select(t.id);
 		(d.querySelector(".mwt-x") as HTMLElement).onclick = (e) => {
@@ -308,6 +245,11 @@ function sync() {
 	browserState.title = t?.title ?? "New tab";
 	browserState.frame = t?.frame as Frame;
 	document.title = t?.url ? `${t.title} - Minason Web` : "Minason Web v2";
+	const faviconLink = document.getElementById("mw-app-favicon") as HTMLLinkElement | null;
+	if (faviconLink) {
+		faviconLink.removeAttribute("type");
+		faviconLink.href = t && isFaviconImage(t.icon) ? t.icon : "/icon.png";
+	}
 	renderStrip();
 }
 
@@ -486,10 +428,10 @@ function toggleSettings(ev?: Event) {
 		`</div></section><section><h3>Current tab appearance</h3>
 			<form class="mws-tab-form">
 				<label>Tab name<input id="mws-tab-name" maxlength="36" placeholder="Use website title" value="${escapeHtml(appearance.name ?? "")}"></label>
-				<label>Icon<input id="mws-tab-icon" maxlength="4" placeholder="🌐" value="${escapeHtml(appearance.icon ?? "")}"></label>
+				<label>Favicon URL<input id="mws-tab-favicon" maxlength="500" placeholder="https://site.com/favicon.ico" value="${escapeHtml(appearance.favicon ?? (isFaviconImage(appearance.icon ?? "") ? appearance.icon! : ""))}"></label>
 				<button type="submit">Save tab appearance</button>
 			</form>
-			<div class="mws-hint">Saved for this website on this device. Use an emoji or a short symbol for the icon.</div>
+			<div class="mws-hint">Saved for this website on this device. Changes the selected tab in the tab strip and the browser tab above. Leave either field blank to use its default.</div>
 			<div class="saved" aria-live="polite"></div>
 		</section>
 		<div class="foot">Website cookies and storage are kept in this browser profile. Nothing is uploaded to Minason. Clearing this site’s browser data can sign you out and reset settings.</div>`;
@@ -517,21 +459,58 @@ function toggleSettings(ev?: Event) {
 		const tab = activeTab();
 		if (!tab) return;
 		const name = el.querySelector<HTMLInputElement>("#mws-tab-name")!.value.trim().slice(0, 36);
-		const icon = [...el.querySelector<HTMLInputElement>("#mws-tab-icon")!.value.trim()].slice(0, 3).join("");
+		const faviconInput = el.querySelector<HTMLInputElement>("#mws-tab-favicon")!.value;
+		const favicon = normalizeFavicon(faviconInput, tab.url);
+		const status = el.querySelector<HTMLElement>(".saved")!;
+		if (favicon === null) {
+			status.textContent = "Use an http(s) favicon URL or a data:image URL.";
+			status.style.color = "#ff9c9c";
+			return;
+		}
 		const key = tabAppearanceKey(tab.url);
 		const all = loadTabAppearances();
-		all[key] = { name, icon };
+		all[key] = { name, favicon };
 		ls.set(TAB_APPEARANCE_KEY, JSON.stringify(all));
 		tab.title = name || tabTitleFor(tab.url);
-		tab.icon = icon || "🌐";
+		tab.icon = favicon || "🌐";
 		sync();
-		el.querySelector<HTMLElement>(".saved")!.textContent = "Saved on this device.";
+		status.style.color = "#8ee6a3";
+		status.textContent = "Saved for this tab and page on this device.";
 	});
 	mark();
 	document.body.append(backdrop, el);
 	settingsBackdrop = backdrop;
 	pop = el;
 	document.addEventListener("keydown", onSettingsKeydown);
+}
+
+
+let transportReconnectNeeded = false;
+let transportReconnectInFlight = false;
+
+async function rebindTransportToActiveWisp() {
+	const url = getActiveWispUrl(demoSettingsStore.wispUrl);
+	if (getWispStatus(url).state !== "connected") return;
+	if (!transportReconnectNeeded || transportReconnectInFlight) return;
+	// The first Wisp handshake can finish before Controller has been constructed.
+	if (!controller) return;
+
+	transportReconnectInFlight = true;
+	try {
+		await controller.wait();
+		const saved = localStorage.getItem("mw-transport");
+		const kind = saved === "epoxy" ? "epoxy" : "libcurl";
+		const transport = getTransport(url, kind);
+		await transport.init();
+		controller.setTransport(transport);
+		transportReconnectNeeded = false;
+		console.info("Minason Web: proxy transport reconnected to Wisp", url);
+	} catch (error) {
+		console.warn("Minason Web: automatic Wisp transport recovery failed", error);
+		transportReconnectNeeded = true;
+	} finally {
+		transportReconnectInFlight = false;
+	}
 }
 
 /* ---------- Wisp connection panel ---------- */
@@ -773,6 +752,14 @@ function refreshActiveWispStatus() {
 }
 window.addEventListener("mw-wisp-status", () => {
 	updateWispDot();
+	const active = getActiveWispUrl(demoSettingsStore.wispUrl);
+	const state = getWispStatus(active).state;
+	if (state === "failed" || state === "idle") {
+		transportReconnectNeeded = true;
+	} else if (state === "connected") {
+		if (!transportBoundWisp) transportBoundWisp = active;
+		void rebindTransportToActiveWisp();
+	}
 	if (wispPop) renderWispPanel(wispPop);
 });
 window.addEventListener("focus", refreshActiveWispStatus);
@@ -969,6 +956,8 @@ const BrowserView: Component<
 	cx.mount = async () => {
 		updateWispDot();
 		await controller.wait();
+		transportReconnectNeeded =
+			getWispStatus(transportBoundWisp).state !== "connected";
 		initTabs(this.hostel);
 		const wait = () =>
 			document.getElementById("mw-tabs")

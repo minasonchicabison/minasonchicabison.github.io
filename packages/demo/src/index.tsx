@@ -157,10 +157,15 @@ async function init() {
 				: "libcurl";
 		demoSettingsStore.transport = primaryKind;
 		const fallbackKind = primaryKind === "epoxy" ? "libcurl" : "epoxy";
-		try {
-			controller = new Controller({
+
+		const startController = async (kind: "epoxy" | "libcurl") => {
+			const transport = getTransport(wisp, kind);
+			// Initialize the network layer now instead of waiting for the first
+			// navigation to discover that the Wisp transport is not ready.
+			await transport.init();
+			const instance = new Controller({
 				serviceworker: readySw,
-				transport: getTransport(wisp, primaryKind),
+				transport,
 				config: {
 					scramjetPath: buildAsset("/scramjet/scramjet.js"),
 					injectPath: buildAsset("/controller/controller.inject.js"),
@@ -168,23 +173,20 @@ async function init() {
 				},
 				scramjetConfig: defaultConfigDev,
 			});
-			await controller.wait();
+			await instance.wait();
+			return instance;
+		};
+
+		try {
+			controller = await startController(primaryKind);
 		} catch (err) {
 			console.warn(
 				primaryKind + " transport initialization failed, trying " + fallbackKind,
 				err
 			);
-			controller = new Controller({
-				serviceworker: readySw,
-				transport: getTransport(wisp, fallbackKind),
-				config: {
-					scramjetPath: buildAsset("/scramjet/scramjet.js"),
-					injectPath: buildAsset("/controller/controller.inject.js"),
-					wasmPath: buildAsset("/scramjet/scramjet.wasm"),
-				},
-				scramjetConfig: defaultConfigDev,
-			});
-			await controller.wait();
+			controller = await startController(fallbackKind);
+			demoSettingsStore.transport = fallbackKind;
+			localStorage.setItem("mw-transport", fallbackKind);
 		}
 		console.log(controller);
 		interstitial.$.state.status = "Controller initialized";
