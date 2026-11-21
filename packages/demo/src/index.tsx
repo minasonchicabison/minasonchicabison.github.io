@@ -5,11 +5,10 @@ import EpoxyClient from "@mercuryworkshop/epoxy-transport";
 import { defaultConfigDev } from "@mercuryworkshop/scramjet";
 import { Controller } from "@mercuryworkshop/scramjet-controller";
 import { HttpCachePlugin } from "@mercuryworkshop/scramjet-utils";
-import { demoSettingsStore } from "./store";
+import { demoSettingsStore, WISP_URLS } from "./store";
 import {
 	connectWisp,
 	getActiveWispUrl,
-	getAllWispUrls,
 	setActiveWispUrl,
 } from "./wisp-status";
 
@@ -34,17 +33,18 @@ export function getTransport(
 
 async function pickWisp(): Promise<string> {
 	const preferred = getActiveWispUrl(demoSettingsStore.wispUrl);
-	const candidates = [...new Set([preferred, ...getAllWispUrls()])];
+	const candidates = [...new Set([preferred, ...WISP_URLS])];
 	for (const url of candidates) {
-		if (await connectWisp(url)) {
+		if (await connectWisp(url, 3000)) {
 			demoSettingsStore.wispUrl = url;
 			setActiveWispUrl(url);
 			return url;
 		}
 	}
-	throw new Error(
-		"No Wisp server completed its handshake. Open the Wisp menu to test or add a server."
-	);
+
+	// Keep the browser UI available so a working custom Wisp can be added.
+	demoSettingsStore.wispUrl = preferred || WISP_URLS[0];
+	return demoSettingsStore.wispUrl;
 }
 
 function isCurrentServiceWorker(
