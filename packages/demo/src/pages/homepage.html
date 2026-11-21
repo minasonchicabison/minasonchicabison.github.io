@@ -47,7 +47,7 @@ form{width:min(580px,92vw)}
 .mini-meta svg{display:block;flex:none}
 .mini-weather svg{width:16px;height:16px}
 .mini-battery svg{width:24px;height:12px}
-#mwe{position:absolute;top:0;left:0;right:auto;bottom:auto;inset:auto;width:min(390px,calc(100vw - 24px));max-height:calc(100vh - 24px);padding:0;display:block;white-space:normal;overflow:visible}
+#mwe{position:absolute;top:0;left:0;right:auto;bottom:auto;width:min(390px,calc(100vw - 24px));max-height:calc(100vh - 24px);padding:0;display:block;white-space:normal;overflow:visible}
 .di-content{position:relative;display:flex;flex-direction:column;gap:11px;padding:17px 18px 16px;min-width:0;transition:opacity .2s ease,filter .2s ease,transform .25s ease}
 .di-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .di-kicker{display:flex;align-items:center;gap:7px;color:#b9b5d9;font-size:9px;font-weight:950;letter-spacing:.16em;text-transform:uppercase}
@@ -136,7 +136,7 @@ form{width:min(580px,92vw)}
 (function(){
 var $=function(i){return document.getElementById(i)};
 function hex(h){h=(h||"").trim().replace("#","");if(h.length!==6)return[143,124,255];return[parseInt(h.substr(0,2),16),parseInt(h.substr(2,2),16),parseInt(h.substr(4,2),16)]}
-var S={bat:null,wx:null},rgb=hex(getComputedStyle(document.documentElement).getPropertyValue("--mw-accent")),prevCh=null;
+var S={bat:null,wx:null},rgb=hex(getComputedStyle(document.documentElement).getPropertyValue("--mw-accent"));
 function send(m){parent.postMessage(m,"*")}
 
 /* search + bookmarks */
@@ -319,7 +319,7 @@ function updateSchoolStatus(){
 
   var first=minuteOf(schedule[0].start),last=minuteOf(schedule[schedule.length-1].end);
   var title="No school today",left="Enjoy your day",detail=dateText,next="School resumes Monday";
-  var badge="WEEKEND",percent=0,off=true,mini="No school",note="The school clock is taking the day off.";
+  var badge="WEEKEND",percent=0,off=true,note="The school clock is taking the day off.";
 
   if(weekday!==0&&weekday!==6){
     off=false;
@@ -330,7 +330,6 @@ function updateSchoolStatus(){
       detail="First bell · "+fmtScheduleTime(schedule[0].start);
       next="Up next · Period 1";
       badge="BEFORE SCHOOL";
-      mini="Before school";
       note="Getting ready for the first period.";
     }else if(minutes>=last){
       title="School day complete";
@@ -338,7 +337,6 @@ function updateSchoolStatus(){
       detail="Last bell · "+fmtScheduleTime(schedule[schedule.length-1].end);
       next="See you next school day";
       badge="SCHOOL DAY COMPLETE";
-      mini="All done";
       percent=100;
       note="You're free. The school clock is off duty.";
     }else{
@@ -351,7 +349,6 @@ function updateSchoolStatus(){
           detail=fmtScheduleTime(current.start)+" – "+fmtScheduleTime(current.end);
           percent=Math.max(0,Math.min(100,elapsed/duration*100));
           badge="NOW IN SESSION";
-          mini=current.id;
           next=i<schedule.length-1
             ?"Up next · "+schedule[i+1].id+" at "+fmtScheduleTime(schedule[i+1].start)
             :"Final period";
@@ -367,7 +364,6 @@ function updateSchoolStatus(){
             detail="Between "+current.id+" & "+following.id;
             percent=Math.max(0,Math.min(100,gapElapsed/gapDuration*100));
             badge="BETWEEN PERIODS";
-            mini="Passing period";
             next="Up next · "+following.id+" at "+fmtScheduleTime(following.start);
             note="Take a breath. The next period is coming up.";
             break;
