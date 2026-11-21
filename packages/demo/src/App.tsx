@@ -22,7 +22,11 @@ App.style = css`
 
 	:scope {
 		width: 100vw;
+		width: 100%;
 		height: 100vh;
+		height: 100dvh;
+		min-width: 0;
+		min-height: 0;
 		display: flex;
 		flex-direction: column;
 		margin: 0;
@@ -53,10 +57,22 @@ App.style = css`
 		flex-direction: column;
 		align-items: stretch;
 		flex: none;
+		width: 100%;
+		min-width: 0;
 	}
 	.tab-bar {
 		display: flex;
 		align-items: center;
+		width: 100%;
+		min-width: 0;
+		overflow: hidden;
+	}
+	@media (max-width: 760px) {
+		.top-bar { gap: 2px; }
+		.tab-bar { min-height: 30px; }
+	}
+	@media (max-height: 640px) {
+		.top-bar { gap: 1px; }
 	}
 `;
 export default App;
