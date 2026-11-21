@@ -8,10 +8,10 @@ export const WISP_URLS = [
 	"wss://artemata.it/stream/534141f4509ce83f5bd805d11df1d7ce5d30a6679fd4c27dbf28fc7c2fb4a710/",
 ];
 
-// No settings UI for these any more: fixed defaults, epoxy with automatic libcurl fallback.
+// Libcurl is the default engine; Epoxy remains available as an alternate.
 export const demoSettingsStore = createStore(
 	{
-		transport: "epoxy" as AvailableTransports,
+		transport: "libcurl" as AvailableTransports,
 		wispUrl: WISP_URLS[0],
 	},
 	{

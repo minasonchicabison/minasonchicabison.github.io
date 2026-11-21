@@ -6,6 +6,17 @@ import {
 import { cachePlugin, controller } from "..";
 import homepage from "./homepage.html?raw";
 import type { Frame } from "@mercuryworkshop/scramjet-controller";
+import { demoSettingsStore } from "../store";
+import {
+	addCustomWispUrl,
+	connectWisp,
+	getActiveWispUrl,
+	getAllWispUrls,
+	getCustomWispUrls,
+	getWispStatus,
+	removeCustomWispUrl,
+	setActiveWispUrl,
+} from "../wisp-status";
 
 /* ---------- tiny storage helper ---------- */
 const ls = {
@@ -384,6 +395,237 @@ function toggleSettings(ev?: Event) {
 	);
 }
 
+
+/* ---------- Wisp connection panel ---------- */
+const WISP_PANEL_CSS = `
+.mww{position:fixed;top:96px;right:14px;z-index:2147483000;width:min(390px,calc(100vw - 28px));max-height:min(76vh,620px);overflow:auto;padding:16px;border-radius:25px;border:1px solid rgba(255,255,255,.14);background:rgba(20,20,34,.78);backdrop-filter:blur(34px) saturate(190%);-webkit-backdrop-filter:blur(34px) saturate(190%);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 28px 70px rgba(0,0,0,.58);color:#ececf6;font:500 12.5px "Manrope Variable",Manrope,system-ui,sans-serif;transform-origin:top right;animation:mww-in .42s cubic-bezier(.2,1.3,.35,1)}
+@keyframes mww-in{from{transform:translateY(-9px) scale(.94);opacity:0;filter:blur(8px)}to{transform:translateY(0) scale(1);opacity:1;filter:none}}
+.mww-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:14px}
+.mww-head strong{display:block;font-size:14px;font-weight:800;letter-spacing:-.02em}
+.mww-head small,.mww-sub{display:block;margin-top:3px;color:#a5a5bd;font-size:11px;line-height:1.5}
+.mww-close{width:28px;height:28px;display:grid;place-items:center;border-radius:50%;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.06);color:inherit;font-size:18px;cursor:pointer}
+.mww-list{display:flex;flex-direction:column;gap:8px}
+.mww-item{display:grid;grid-template-columns:10px minmax(0,1fr) auto;align-items:center;gap:10px;padding:10px;border:1px solid rgba(255,255,255,.09);border-radius:15px;background:rgba(255,255,255,.045)}
+.mww-light{width:8px;height:8px;border-radius:50%;background:#ff453a;box-shadow:0 0 10px currentColor;color:#ff453a}
+.mww-light.connecting{background:#ffd60a;color:#ffd60a;animation:mww-pulse 1.1s ease-in-out infinite}
+.mww-light.connected{background:#30d158;color:#30d158}
+.mww-endpoint{min-width:0;overflow-wrap:anywhere;color:#eeeef6;font-size:11.5px;font-weight:650}
+.mww-state{display:block;margin-top:3px;color:#a3a3b9;font-size:10.5px;font-weight:500}
+.mww-actions{display:flex;align-items:center;gap:5px}
+.mww button{border:1px solid rgba(255,255,255,.11);border-radius:10px;background:rgba(255,255,255,.06);color:#ececf6;padding:6px 8px;font:700 10.5px system-ui,sans-serif;cursor:pointer;transition:transform .2s,background .2s,border-color .2s}
+.mww button:hover{background:rgba(255,255,255,.12);transform:translateY(-1px)}
+.mww button:disabled{opacity:.5;cursor:default;transform:none}
+.mww button.selected{border-color:rgba(48,209,88,.4);color:#7ee69a;background:rgba(48,209,88,.1)}
+.mww-section{margin-top:14px;padding-top:13px;border-top:1px solid rgba(255,255,255,.09)}
+.mww-section h4{margin:0 0 8px;color:#aaaac0;font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
+.mww-add{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px}
+.mww-add input{min-width:0;width:100%;height:36px;padding:0 11px;border:1px solid rgba(255,255,255,.12);border-radius:11px;background:rgba(0,0,0,.22);color:#fff;font:500 11.5px inherit;font-family:inherit;outline:0}
+.mww-add input:focus{border-color:var(--mw-accent,#8f7cff);box-shadow:0 0 0 3px color-mix(in srgb,var(--mw-accent,#8f7cff) 22%,transparent)}
+.mww-note{min-height:14px;margin-top:7px;color:#a5a5bd;font-size:10.5px;line-height:1.4}
+.mww-engines{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.mww-engine{justify-content:center;text-align:center;padding:9px 8px!important}
+.mww-engine.selected{border-color:var(--mw-accent,#8f7cff);background:color-mix(in srgb,var(--mw-accent,#8f7cff) 17%,transparent)}
+@keyframes mww-pulse{50%{opacity:.35;box-shadow:0 0 2px currentColor}}
+@media(prefers-reduced-motion:reduce){.mww,.mww *{animation:none!important;transition:none!important}}
+`;
+
+let wispPop: HTMLDivElement | null = null;
+let wispOutside: ((event: PointerEvent) => void) | null = null;
+
+function updateWispDot() {
+	const dot = document.getElementById("mw-wisp-dot");
+	if (!dot) return;
+	const active = getActiveWispUrl(demoSettingsStore.wispUrl);
+	const state = getWispStatus(active).state;
+	dot.classList.toggle("connected", state === "connected");
+	dot.classList.toggle("connecting", state === "connecting");
+	dot.classList.toggle("failed", state === "failed" || state === "idle");
+	dot.setAttribute(
+		"aria-label",
+		"Wisp connection: " + state + ". Open Wisp connections."
+	);
+	dot.setAttribute("title", "Wisp: " + state + " · Manage connections");
+}
+
+function renderWispPanel(panel: HTMLDivElement) {
+	const list = panel.querySelector(".mww-list")!;
+	list.replaceChildren();
+	const active = getActiveWispUrl(demoSettingsStore.wispUrl);
+	const custom = getCustomWispUrls();
+
+	for (const url of getAllWispUrls()) {
+		const status = getWispStatus(url);
+		const row = document.createElement("div");
+		row.className = "mww-item";
+
+		const light = document.createElement("span");
+		light.className = "mww-light " + status.state;
+		const detail = document.createElement("div");
+		detail.className = "mww-endpoint";
+		detail.textContent = url.replace(/^wss?:\/\//, "");
+		const state = document.createElement("span");
+		state.className = "mww-state";
+		state.textContent =
+			status.state === "connected"
+				? "WebSocket handshake connected"
+				: status.state === "connecting"
+					? "Connecting to Wisp..."
+					: status.state === "failed"
+						? status.error || "Connection failed"
+						: "Not tested yet";
+		detail.appendChild(state);
+
+		const actions = document.createElement("div");
+		actions.className = "mww-actions";
+		const use = document.createElement("button");
+		const selected = url === active;
+		use.className = selected ? "selected" : "";
+		use.textContent = selected ? "Active" : "Use";
+		use.disabled = selected;
+		use.title = selected
+			? "Currently selected Wisp server"
+			: "Use this server and reload the browser";
+		use.onclick = () => {
+			setActiveWispUrl(url);
+			demoSettingsStore.wispUrl = url;
+			window.location.reload();
+		};
+		actions.appendChild(use);
+
+		const test = document.createElement("button");
+		test.textContent = status.state === "connecting" ? "..." : "Test";
+		test.disabled = status.state === "connecting";
+		test.onclick = async () => {
+			await connectWisp(url);
+			updateWispDot();
+			if (wispPop) renderWispPanel(wispPop);
+		};
+		actions.appendChild(test);
+
+		if (custom.includes(url)) {
+			const remove = document.createElement("button");
+			remove.textContent = "×";
+			remove.title = "Remove custom server";
+			remove.onclick = () => {
+				removeCustomWispUrl(url);
+				if (wispPop) renderWispPanel(wispPop);
+				updateWispDot();
+			};
+			actions.appendChild(remove);
+		}
+
+		row.append(light, detail, actions);
+		list.appendChild(row);
+	}
+
+	const engine = localStorage.getItem("mw-transport") || demoSettingsStore.transport;
+	panel.querySelectorAll<HTMLButtonElement>("[data-engine]").forEach((button) => {
+		button.classList.toggle("selected", button.dataset.engine === engine);
+	});
+
+	const note = panel.querySelector<HTMLElement>(".mww-note");
+	if (note && !note.dataset.keep) note.textContent = "";
+	updateWispDot();
+}
+
+function closeWispPanel() {
+	wispPop?.remove();
+	wispPop = null;
+	if (wispOutside) {
+		document.removeEventListener("pointerdown", wispOutside);
+		wispOutside = null;
+	}
+}
+
+function toggleWispPanel(event?: Event) {
+	event?.stopPropagation();
+	if (wispPop) {
+		closeWispPanel();
+		return;
+	}
+	closeSettings();
+	if (!document.getElementById("mww-css")) {
+		const style = document.createElement("style");
+		style.id = "mww-css";
+		style.textContent = WISP_PANEL_CSS;
+		document.head.appendChild(style);
+	}
+	const panel = document.createElement("div");
+	panel.className = "mww";
+	panel.innerHTML = `
+		<div class="mww-head">
+			<div><strong>Wisp connections</strong><small>Choose a relay and check its handshake status</small></div>
+			<button type="button" class="mww-close" aria-label="Close">×</button>
+		</div>
+		<div class="mww-list"></div>
+		<div class="mww-section">
+			<h4>Add your own Wisp</h4>
+			<form class="mww-add">
+				<input name="wisp" type="url" autocomplete="off" spellcheck="false" placeholder="wss://server.example/wisp/" aria-label="Wisp WebSocket URL" required>
+				<button type="submit">Add</button>
+			</form>
+			<div class="mww-note">Use a secure wss:// address ending in /.</div>
+		</div>
+		<div class="mww-section">
+			<h4>Transport engine</h4>
+			<div class="mww-engines">
+				<button type="button" class="mww-engine" data-engine="libcurl">Libcurl · recommended</button>
+				<button type="button" class="mww-engine" data-engine="epoxy">Epoxy · alternate</button>
+			</div>
+			<div class="mww-sub">Changing the engine reloads the browser.</div>
+		</div>`;
+	panel.querySelector(".mww-close")!.addEventListener("click", closeWispPanel);
+	panel.querySelector<HTMLFormElement>(".mww-add")!.addEventListener("submit", async (event) => {
+		event.preventDefault();
+		const input = panel.querySelector<HTMLInputElement>('input[name="wisp"]')!;
+		const note = panel.querySelector<HTMLElement>(".mww-note")!;
+		const url = addCustomWispUrl(input.value);
+		if (!url) {
+			note.dataset.keep = "1";
+			note.textContent = "Enter a valid wss:// URL (or ws:// localhost URL).";
+			return;
+		}
+		input.value = "";
+		note.dataset.keep = "";
+		note.textContent = "Added. Checking the Wisp handshake...";
+		renderWispPanel(panel);
+		await connectWisp(url);
+		renderWispPanel(panel);
+		note.dataset.keep = "1";
+		note.textContent = "Server saved on this device. Use it to make it active.";
+	});
+	panel.querySelectorAll<HTMLButtonElement>("[data-engine]").forEach((button) => {
+		button.addEventListener("click", () => {
+			const engine = button.dataset.engine;
+			if (engine !== "libcurl" && engine !== "epoxy") return;
+			localStorage.setItem("mw-transport", engine);
+			demoSettingsStore.transport = engine;
+			window.location.reload();
+		});
+	});
+	document.body.appendChild(panel);
+	wispPop = panel;
+	renderWispPanel(panel);
+
+	wispOutside = (event: PointerEvent) => {
+		if (
+			wispPop &&
+			!wispPop.contains(event.target as Node) &&
+			event.target !== document.getElementById("mw-wisp-dot")
+		) {
+			closeWispPanel();
+		}
+	};
+	setTimeout(() => {
+		if (wispOutside) document.addEventListener("pointerdown", wispOutside);
+	}, 0);
+}
+
+window.addEventListener("mw-wisp-status", () => {
+	updateWispDot();
+	if (wispPop) renderWispPanel(wispPop);
+});
+
 /* ---------- omnibox ---------- */
 export const Omnibox: Component = function (cx) {
 	return (
@@ -410,7 +652,14 @@ export const Omnibox: Component = function (cx) {
 					</button>
 				</div>
 				<div class="url-wrap">
-					<span class="url-dot"></span>
+					<button
+						id="mw-wisp-dot"
+						type="button"
+						class="url-dot failed"
+						aria-label="Wisp connection: not connected. Open Wisp connections."
+						title="Wisp: not connected · Manage connections"
+						on:click={(e: Event) => toggleWispPanel(e)}
+					></button>
 					<input
 						id="search"
 						class="url-input"
@@ -424,6 +673,15 @@ export const Omnibox: Component = function (cx) {
 				<div class="omnibox-nav">
 					<button type="button" class="nav-btn" aria-label="Bookmark this page" on:click={() => addBookmark(browserState.url)}>
 						<span class="material-symbols-outlined">bookmark</span>
+					</button>
+					<button
+						type="button"
+						class="nav-btn"
+						aria-label="Open GeForce NOW directly in a new tab"
+						title="Launch GeForce NOW in a normal browser tab"
+						on:click={() => window.open("https://play.geforcenow.com", "_blank", "noopener,noreferrer")}
+					>
+						<span class="material-symbols-outlined">sports_esports</span>
 					</button>
 					<button
 						type="button"
@@ -507,22 +765,45 @@ Omnibox.style = css`
 		display: flex;
 		align-items: center;
 		position: relative;
+		gap: 0;
 	}
 	.url-dot {
-		position: absolute;
-		left: 14px;
-		width: 8px;
-		height: 8px;
+		position: static;
+		flex: none;
+		width: 9px;
+		height: 9px;
+		min-width: 9px;
+		margin: 0 10px 0 15px;
+		padding: 0;
+		border: 0;
 		border-radius: 50%;
-		background: #30d158;
-		box-shadow: 0 0 10px #30d158;
-		pointer-events: none;
+		background: #ff453a;
+		box-shadow: 0 0 0 3px rgba(255,69,58,.11), 0 0 12px rgba(255,69,58,.7);
+		cursor: pointer;
+		transition: background .25s, box-shadow .35s, transform .25s;
 	}
+	.url-dot:hover { transform: scale(1.18); }
+	.url-dot.connected {
+		background: #30d158;
+		box-shadow: 0 0 0 3px rgba(48,209,88,.11), 0 0 13px rgba(48,209,88,.8);
+	}
+	.url-dot.connecting {
+		background: #ffd60a;
+		box-shadow: 0 0 0 3px rgba(255,214,10,.12), 0 0 13px rgba(255,214,10,.8);
+		animation: mw-dot-pulse 1s ease-in-out infinite;
+	}
+	.url-dot.failed {
+		background: #ff453a;
+		box-shadow: 0 0 0 3px rgba(255,69,58,.11), 0 0 12px rgba(255,69,58,.7);
+	}
+	@keyframes mw-dot-pulse { 50% { opacity: .45; } }
 	.url-input {
 		box-sizing: border-box;
+		flex: 1;
+		min-width: 0;
 		width: 100%;
 		height: 2.5em;
-		padding: 0 14px 0 34px !important;
+		padding: 0 14px 0 0 !important;
 		font-size: 0.9em;
 		color: var(--mw-fg, #ececf6);
 	}
@@ -540,6 +821,7 @@ const BrowserView: Component<
 	}
 > = function (cx) {
 	cx.mount = async () => {
+		updateWispDot();
 		await controller.wait();
 		initTabs(this.hostel);
 		const wait = () =>

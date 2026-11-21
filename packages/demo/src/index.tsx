@@ -5,7 +5,13 @@ import EpoxyClient from "@mercuryworkshop/epoxy-transport";
 import { defaultConfigDev } from "@mercuryworkshop/scramjet";
 import { Controller } from "@mercuryworkshop/scramjet-controller";
 import { HttpCachePlugin } from "@mercuryworkshop/scramjet-utils";
-import { demoSettingsStore, WISP_URLS } from "./store";
+import { demoSettingsStore } from "./store";
+import {
+	connectWisp,
+	getActiveWispUrl,
+	getAllWispUrls,
+	setActiveWispUrl,
+} from "./wisp-status";
 
 declare const __MW_BUILD_ID__: string;
 
@@ -26,38 +32,19 @@ export function getTransport(
 		: new LibcurlClient({ wisp });
 }
 
-function probeWisp(url: string, ms = 4000): Promise<boolean> {
-	return new Promise((resolve) => {
-		let ws: WebSocket | undefined;
-		const timer = setTimeout(() => {
-			try {
-				ws?.close();
-			} catch {}
-			resolve(false);
-		}, ms);
-		try {
-			ws = new WebSocket(url);
-			ws.onopen = () => {
-				clearTimeout(timer);
-				ws!.close();
-				resolve(true);
-			};
-			ws.onerror = () => {
-				clearTimeout(timer);
-				resolve(false);
-			};
-		} catch {
-			clearTimeout(timer);
-			resolve(false);
-		}
-	});
-}
-
 async function pickWisp(): Promise<string> {
-	for (const url of [demoSettingsStore.wispUrl, ...WISP_URLS]) {
-		if (await probeWisp(url)) return url;
+	const preferred = getActiveWispUrl(demoSettingsStore.wispUrl);
+	const candidates = [...new Set([preferred, ...getAllWispUrls()])];
+	for (const url of candidates) {
+		if (await connectWisp(url)) {
+			demoSettingsStore.wispUrl = url;
+			setActiveWispUrl(url);
+			return url;
+		}
 	}
-	return demoSettingsStore.wispUrl;
+	throw new Error(
+		"No Wisp server completed its handshake. Open the Wisp menu to test or add a server."
+	);
 }
 
 function isCurrentServiceWorker(
@@ -163,10 +150,17 @@ async function init() {
 			"Service worker is controlling this page";
 
 		const wisp = await pickWisp();
+		const savedTransport = localStorage.getItem("mw-transport");
+		const primaryKind: "epoxy" | "libcurl" =
+			savedTransport === "epoxy" || savedTransport === "libcurl"
+				? savedTransport
+				: "libcurl";
+		demoSettingsStore.transport = primaryKind;
+		const fallbackKind = primaryKind === "epoxy" ? "libcurl" : "epoxy";
 		try {
 			controller = new Controller({
 				serviceworker: readySw,
-				transport: getTransport(wisp, demoSettingsStore.transport),
+				transport: getTransport(wisp, primaryKind),
 				config: {
 					scramjetPath: buildAsset("/scramjet/scramjet.js"),
 					injectPath: buildAsset("/controller/controller.inject.js"),
@@ -176,10 +170,13 @@ async function init() {
 			});
 			await controller.wait();
 		} catch (err) {
-			console.warn("Primary transport failed, falling back to libcurl", err);
+			console.warn(
+				primaryKind + " transport initialization failed, trying " + fallbackKind,
+				err
+			);
 			controller = new Controller({
 				serviceworker: readySw,
-				transport: getTransport(wisp, "libcurl"),
+				transport: getTransport(wisp, fallbackKind),
 				config: {
 					scramjetPath: buildAsset("/scramjet/scramjet.js"),
 					injectPath: buildAsset("/controller/controller.inject.js"),
