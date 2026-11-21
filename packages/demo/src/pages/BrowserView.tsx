@@ -85,57 +85,13 @@ export function tabTitleFor(url: string, rawTitle?: string): string {
 }
 
 
-type TabAppearance = { name?: string; favicon?: string; icon?: string };
-const TAB_APPEARANCE_KEY = "mw-tab-appearance";
-
-function tabAppearanceKey(url: string): string {
-	if (!url || url.startsWith("data:")) return "__newtab__";
-	try {
-		const parsed = new URL(url);
-		return parsed.origin + parsed.pathname;
-	} catch {
-		return "__newtab__";
-	}
-}
-
-function normalizeFavicon(input: string, pageUrl: string): string | null {
-	const value = input.trim();
-	if (!value) return "";
-	if (/^data:image\//i.test(value)) return value;
-	try {
-		const parsed = new URL(value, pageUrl || location.origin);
-		if (parsed.protocol === "https:" || parsed.protocol === "http:") {
-			return parsed.href;
-		}
-	} catch {}
-	return null;
-}
-
 function isFaviconImage(value: string): boolean {
 	return /^https?:\/\//i.test(value) || /^data:image\//i.test(value);
 }
 
-function loadTabAppearances(): Record<string, TabAppearance> {
-	try {
-		const stored = JSON.parse(ls.get(TAB_APPEARANCE_KEY, "{}"));
-		return stored && typeof stored === "object" && !Array.isArray(stored)
-			? stored
-			: {};
-	} catch {
-		return {};
-	}
-}
-
-function getTabAppearance(url: string): TabAppearance {
-	const item = loadTabAppearances()[tabAppearanceKey(url)];
-	return item && typeof item === "object" ? item : {};
-}
-
 function applyTabAppearance(tab: Tab) {
-	const saved = getTabAppearance(tab.url);
-	tab.title = saved.name?.trim() || tabTitleFor(tab.url);
-	const oldIcon = saved.icon?.trim() || "";
-	tab.icon = saved.favicon?.trim() || (isFaviconImage(oldIcon) ? oldIcon : "") || "🌐";
+	tab.title = tabTitleFor(tab.url);
+	tab.icon = "🌐";
 }
 
 /* ---------- bookmarks ---------- */
@@ -159,6 +115,86 @@ function addBookmark(input: string) {
 	saveBm([...l, { t: tabTitleFor(u), u }]);
 }
 
+
+/* ---------- live data for the Dynamic Island ---------- */
+// Battery state and IP-based weather are read in the browser shell, then
+// forwarded to the homepage iframe because it is hosted from a data: URL.
+const svc = {
+	bat: null as null | { level: number; charging: boolean },
+	wx: null as null | { temp: number; code: number; day: boolean; city: string },
+	started: false,
+};
+let refreshWeatherNow: (() => void) | null = null;
+
+function startServices() {
+	if (svc.started) return;
+	svc.started = true;
+
+	try {
+		const getBattery = (navigator as any).getBattery;
+		if (typeof getBattery === "function") {
+			void getBattery.call(navigator).then((battery: any) => {
+				const update = () => {
+					svc.bat = {
+						level: Math.max(0, Math.min(100, Math.round(Number(battery.level) * 100))),
+						charging: !!battery.charging,
+					};
+					pushAll();
+				};
+				update();
+				battery.addEventListener("levelchange", update);
+				battery.addEventListener("chargingchange", update);
+			}).catch(() => {});
+		}
+	} catch {}
+
+	let lastWeatherLoaded = 0;
+	const loadWeather = async (force = false) => {
+		const now = Date.now();
+		if (now - lastWeatherLoaded < (force ? 60_000 : 15 * 60_000)) return;
+		lastWeatherLoaded = now;
+		try {
+			const locationResponse = await fetch("https://ipapi.co/json/", { cache: "no-store" });
+			if (!locationResponse.ok) throw new Error("Weather location lookup failed");
+			const place = await locationResponse.json();
+			const latitude = Number(place.latitude);
+			const longitude = Number(place.longitude);
+			if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+				throw new Error("Weather location was unavailable");
+			}
+			const unit = /^en-US/i.test(navigator.language) ? "fahrenheit" : "celsius";
+			const weatherResponse = await fetch(
+				"https://api.open-meteo.com/v1/forecast?latitude=" +
+					encodeURIComponent(String(latitude)) +
+					"&longitude=" +
+					encodeURIComponent(String(longitude)) +
+					"&current=temperature_2m,weather_code,is_day&temperature_unit=" +
+					unit,
+				{ cache: "no-store" }
+			);
+			if (!weatherResponse.ok) throw new Error("Weather lookup failed");
+			const result = await weatherResponse.json();
+			const current = result?.current;
+			if (!current || !Number.isFinite(Number(current.temperature_2m))) {
+				throw new Error("Weather response was incomplete");
+			}
+			svc.wx = {
+				temp: Math.round(Number(current.temperature_2m)),
+				code: Number(current.weather_code) || 0,
+				day: !!current.is_day,
+				city: typeof place.city === "string" ? place.city : "",
+			};
+			pushAll();
+		} catch {
+			// Leave the last good reading in place, if one exists.
+		}
+	};
+	refreshWeatherNow = () => { void loadWeather(true); };
+	void loadWeather();
+	window.setInterval(() => { void loadWeather(); }, 15 * 60_000);
+}
+
+// EDIT THESE STRINGS to change the rotating greeting under the Minason Web heading.
 const WELCOME_MESSAGES = [
 	"Your tabs called. They want a union.",
 	"Powered by questionable amounts of caffeine.",
@@ -237,7 +273,7 @@ const activeTab = () => tabs.find((t) => t.id === activeId);
 
 function pushTo(t: Tab) {
 	t.iframe.contentWindow?.postMessage(
-		{ type: "mw-state", vars: themeVars(), bm: loadBm() },
+		{ type: "mw-state", vars: themeVars(), bm: loadBm(), bat: svc.bat, wx: svc.wx },
 		"*"
 	);
 }
@@ -364,6 +400,7 @@ function onMessage(e: MessageEvent) {
 	if (!t) return;
 	const d = e.data;
 	if (d?.type === "mw-ready") pushTo(t);
+	else if (d?.type === "mw-refresh-live") refreshWeatherNow?.();
 	else if (d?.type === "mw-go") {
 		if (t.id !== activeId) select(t.id);
 		go(d.q);
@@ -383,6 +420,7 @@ function initTabs(el: HTMLElement) {
 	host = el;
 	window.addEventListener("message", onMessage);
 	window.addEventListener("mw-theme", pushAll);
+	startServices();
 	newTab();
 	const goto = new URL(location.href).searchParams.get("goto");
 	if (goto) {
@@ -444,8 +482,6 @@ function toggleSettings(ev?: Event) {
 	}
 
 	const T = (window as any).mwTheme;
-	const currentTab = activeTab();
-	const appearance = getTabAppearance(currentTab?.url ?? "");
 	const backdrop = document.createElement("div");
 	backdrop.className = "mws-backdrop";
 	backdrop.setAttribute("aria-hidden", "true");
@@ -466,15 +502,7 @@ function toggleSettings(ev?: Event) {
 		Object.keys(ENGINES)
 			.map((key) => `<button type="button" data-engine="${key}">${ENGINES[key].n}</button>`)
 			.join("") +
-		`</div></section><section><h3>Current tab appearance</h3>
-			<form class="mws-tab-form">
-				<label>Tab name<input id="mws-tab-name" maxlength="36" placeholder="Use website title" value="${escapeHtml(appearance.name ?? "")}"></label>
-				<label>Favicon URL<input id="mws-tab-favicon" maxlength="500" placeholder="https://site.com/favicon.ico" value="${escapeHtml(appearance.favicon ?? (isFaviconImage(appearance.icon ?? "") ? appearance.icon! : ""))}"></label>
-				<button type="submit">Save tab appearance</button>
-			</form>
-			<div class="mws-hint">Saved for this website on this device. Changes the selected tab in the tab strip and the browser tab above. Leave either field blank to use its default.</div>
-			<div class="saved" aria-live="polite"></div>
-		</section>
+		`</div></section>
 		<div class="foot">Website cookies and storage are kept in this browser profile. Nothing is uploaded to Minason. Clearing this site’s browser data can sign you out and reset settings.</div>`;
 	el.querySelector(".mws-close")!.addEventListener("click", closeSettings);
 
@@ -495,29 +523,6 @@ function toggleSettings(ev?: Event) {
 		mark();
 	});
 
-	el.querySelector<HTMLFormElement>(".mws-tab-form")!.addEventListener("submit", (event) => {
-		event.preventDefault();
-		const tab = activeTab();
-		if (!tab) return;
-		const name = el.querySelector<HTMLInputElement>("#mws-tab-name")!.value.trim().slice(0, 36);
-		const faviconInput = el.querySelector<HTMLInputElement>("#mws-tab-favicon")!.value;
-		const favicon = normalizeFavicon(faviconInput, tab.url);
-		const status = el.querySelector<HTMLElement>(".saved")!;
-		if (favicon === null) {
-			status.textContent = "Use an http(s) favicon URL or a data:image URL.";
-			status.style.color = "#ff9c9c";
-			return;
-		}
-		const key = tabAppearanceKey(tab.url);
-		const all = loadTabAppearances();
-		all[key] = { name, favicon };
-		ls.set(TAB_APPEARANCE_KEY, JSON.stringify(all));
-		tab.title = name || tabTitleFor(tab.url);
-		tab.icon = favicon || "🌐";
-		sync();
-		status.style.color = "#8ee6a3";
-		status.textContent = "Saved for this tab and page on this device.";
-	});
 	mark();
 	document.body.append(backdrop, el);
 	settingsBackdrop = backdrop;
