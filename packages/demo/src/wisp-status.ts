@@ -78,7 +78,15 @@ export function getCustomWispUrls(): string[] {
 }
 
 export function getWispStatus(url: string): WispStatusRecord {
-	return states.get(url) ?? { url, state: "idle" };
+	const status = states.get(url) ?? { url, state: "idle" as const };
+	if (
+		status.state === "connected" &&
+		sockets.get(url)?.readyState !== WebSocket.OPEN
+	) {
+		setState(url, "failed", "Wisp connection is no longer open");
+		return states.get(url)!;
+	}
+	return status;
 }
 
 export function getWispStatuses(): WispStatusRecord[] {

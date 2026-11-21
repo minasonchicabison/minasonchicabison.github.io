@@ -84,6 +84,41 @@ export function tabTitleFor(url: string, rawTitle?: string): string {
 	}
 }
 
+
+type TabAppearance = { name?: string; icon?: string };
+const TAB_APPEARANCE_KEY = "mw-tab-appearance";
+
+function tabAppearanceKey(url: string): string {
+	if (!url || url.startsWith("data:")) return "__newtab__";
+	try {
+		return new URL(url).hostname.toLowerCase();
+	} catch {
+		return "__newtab__";
+	}
+}
+
+function loadTabAppearances(): Record<string, TabAppearance> {
+	try {
+		const stored = JSON.parse(ls.get(TAB_APPEARANCE_KEY, "{}"));
+		return stored && typeof stored === "object" && !Array.isArray(stored)
+			? stored
+			: {};
+	} catch {
+		return {};
+	}
+}
+
+function getTabAppearance(url: string): TabAppearance {
+	const item = loadTabAppearances()[tabAppearanceKey(url)];
+	return item && typeof item === "object" ? item : {};
+}
+
+function applyTabAppearance(tab: Tab) {
+	const saved = getTabAppearance(tab.url);
+	tab.title = saved.name?.trim() || tabTitleFor(tab.url);
+	tab.icon = saved.icon?.trim() || "🌐";
+}
+
 /* ---------- bookmarks ---------- */
 type Bm = { t: string; u: string };
 const loadBm = (): Bm[] => {
@@ -152,6 +187,51 @@ async function startServices() {
 	setInterval(loadWeather, 15 * 60 * 1000);
 }
 
+
+const WELCOME_MESSAGES = [
+	"Your tabs called. They want a union.",
+	"Powered by questionable amounts of caffeine.",
+	"Browsing at the speed of mild inconvenience.",
+	"Another day, another 47 open tabs.",
+	"Your search history is between you and the pixels.",
+	"Welcome back, professional button clicker.",
+	"Loading vibes… please do not refresh the vibes.",
+	"Internet explorer? We barely know her.",
+	"Now with 12% more unnecessary gradients.",
+	"Somewhere, a server just sneezed.",
+	"Go forth and open suspiciously many tabs.",
+	"Your curiosity has entered the chat.",
+	"Built different. Compiled similarly.",
+	"Less spinning wheel, more winning feel.",
+	"Today's forecast: scattered tabs.",
+	"Ctrl+T is a lifestyle.",
+	"Be right back, negotiating with the internet.",
+	"Searching for the meaning of the loading bar.",
+	"One small click for you, one giant request for the server.",
+	"Please keep all hands inside the browser.",
+	"Fresh tab. Same chaotic energy.",
+	"Your bookmarks are judging your life choices.",
+	"404 problems, but a vibe ain't one.",
+	"Welcome to the information superhighway. Mind the potholes.",
+	"Tabs are temporary. Screenshots are forever.",
+	"Maximum curiosity. Minimum context.",
+	"Currently orbiting the world wide web.",
+	"May your pages load and your snacks be plentiful.",
+	"Shiny pixels, questionable decisions.",
+	"Congratulations, you found the internet again."
+];
+
+function escapeHtml(value: string): string {
+	const entities: Record<string, string> = {
+		"&": "&amp;",
+		"<": "&lt;",
+		">": "&gt;",
+		'"': "&quot;",
+		"'": "&#39;",
+	};
+	return value.replace(/[&<>"']/g, (char) => entities[char] ?? char);
+}
+
 const themeVars = (): Record<string, string> =>
 	(window as any).mwTheme?.vars() ?? {};
 
@@ -159,7 +239,10 @@ const buildHomeSrc = () => {
 	const vars = Object.entries(themeVars())
 		.map(([k, v]) => `${k}:${v}`)
 		.join(";");
-	const html = homepage.replace("/*VARS*/", `:root{${vars}}`);
+	const message = WELCOME_MESSAGES[Math.floor(Math.random() * WELCOME_MESSAGES.length)];
+	const html = homepage
+		.replace("/*VARS*/", `:root{${vars}}`)
+		.replace("/*WELCOME_MESSAGE*/", escapeHtml(message));
 	let bin = "";
 	new TextEncoder().encode(html).forEach((c) => (bin += String.fromCharCode(c)));
 	return `data:text/html;charset=utf-8;base64,${btoa(bin)}`;
@@ -170,6 +253,7 @@ type Tab = {
 	id: number;
 	url: string;
 	title: string;
+	icon: string;
 	iframe: HTMLIFrameElement;
 	frame: Frame;
 };
@@ -198,7 +282,8 @@ function renderStrip() {
 		const d = document.createElement("div");
 		d.className = "mwt" + (t.id === activeId ? " on" : "");
 		d.innerHTML =
-			'<i class="mwt-dot"></i><span class="mwt-title"></span><button type="button" class="mwt-x" aria-label="Close tab">\u00d7</button>';
+			'<span class="mwt-icon"></span><span class="mwt-title"></span><button type="button" class="mwt-x" aria-label="Close tab">\u00d7</button>';
+		d.querySelector(".mwt-icon")!.textContent = t.icon || "🌐";
 		d.querySelector(".mwt-title")!.textContent = t.title;
 		d.onclick = () => select(t.id);
 		(d.querySelector(".mwt-x") as HTMLElement).onclick = (e) => {
@@ -237,10 +322,11 @@ function newTab() {
 	const iframe = document.createElement("iframe");
 	iframe.className = "mw-frame";
 	host.appendChild(iframe);
-	const t = { id: nextId++, url: "", title: "New tab", iframe } as Tab;
+	const t = { id: nextId++, url: "", title: "New tab", icon: "🌐", iframe } as Tab;
+	applyTabAppearance(t);
 	const urlWatcher = new UrlWatcherPlugin((url) => {
 		t.url = url.startsWith("data:") ? "" : url;
-		t.title = tabTitleFor(t.url);
+		applyTabAppearance(t);
 		t.id === activeId ? sync() : renderStrip();
 	});
 	const catchEscapedLinks = new CatchEscapedLinksPlugin(
@@ -320,81 +406,133 @@ function initTabs(el: HTMLElement) {
 	}
 }
 
-/* ---------- settings popover: theme + search engine only ---------- */
+
+/* ---------- browser settings ---------- */
 const SETTINGS_CSS = `
-.mws{position:fixed;top:96px;right:12px;z-index:2147483000;width:292px;padding:16px;border-radius:26px;border:1px solid rgba(255,255,255,.14);background:rgba(28,28,44,.55);backdrop-filter:blur(34px) saturate(190%);-webkit-backdrop-filter:blur(34px) saturate(190%);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 28px 70px rgba(0,0,0,.55);color:#ececf6;font:500 13px "Manrope Variable",Manrope,system-ui,sans-serif;transform-origin:top right;animation:mwsin .5s cubic-bezier(.34,1.5,.5,1)}
-@keyframes mwsin{from{transform:scale(.6) translateY(-12px);opacity:0}}
-.mws h3{margin:0 0 10px;font-size:12px;font-weight:700;color:#9a9ab4;letter-spacing:.02em}
-.mws section+section{margin-top:18px}
+.mws-backdrop{position:fixed;inset:0;z-index:2147482998;background:rgba(2,3,10,.48);backdrop-filter:blur(4px) saturate(115%);-webkit-backdrop-filter:blur(4px) saturate(115%);animation:mws-fade .18s ease}
+.mws{position:fixed;top:88px;right:12px;z-index:2147483000;width:min(360px,calc(100vw - 24px));max-height:calc(100vh - 104px);overflow:auto;padding:18px;border-radius:26px;border:1px solid rgba(255,255,255,.19);background:rgba(17,18,31,.97);backdrop-filter:blur(38px) saturate(180%);-webkit-backdrop-filter:blur(38px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 30px 90px rgba(0,0,0,.78),0 0 38px color-mix(in srgb,var(--mw-accent,#8f7cff) 14%,transparent);color:#f5f5ff;font:500 13px "Manrope Variable",Manrope,system-ui,sans-serif;transform-origin:top right;animation:mws-in .34s cubic-bezier(.2,1.25,.35,1)}
+@keyframes mws-fade{from{opacity:0}to{opacity:1}}
+@keyframes mws-in{from{transform:translateY(-10px) scale(.96);opacity:0;filter:blur(8px)}to{transform:translateY(0) scale(1);opacity:1;filter:none}}
+.mws-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:15px}
+.mws-head strong{font-size:15px;font-weight:800;letter-spacing:-.025em}
+.mws-close{width:29px;height:29px;display:grid;place-items:center;border-radius:50%;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.09);color:#fff;font-size:17px;cursor:pointer}
+.mws h3{margin:0 0 10px;font-size:10px;font-weight:800;color:#bbbcd2;letter-spacing:.13em;text-transform:uppercase}
+.mws section+section{margin-top:17px;padding-top:15px;border-top:1px solid rgba(255,255,255,.11)}
 .mws .g{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.mws button{display:flex;align-items:center;gap:9px;padding:9px 11px;border-radius:16px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.055);color:inherit;font:600 12.5px inherit;font-family:inherit;cursor:pointer;text-align:left;transition:transform .4s cubic-bezier(.34,1.5,.5,1),background .25s,border-color .25s}
-.mws button:hover{background:rgba(255,255,255,.1);transform:translateY(-1px)}
-.mws button.on{border-color:var(--mw-accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--mw-accent) 35%,transparent)}
-.mws .d{width:20px;height:20px;border-radius:50%;flex:none;box-shadow:inset 0 1px 1px rgba(255,255,255,.5),0 2px 8px rgba(0,0,0,.35)}
-.mws .row{display:flex;flex-direction:column;gap:8px}
-.mws .foot{margin-top:16px;font-size:11.5px;color:#9a9ab4;text-align:center}
+.mws button{display:flex;align-items:center;gap:9px;padding:9px 11px;border-radius:14px;border:1px solid rgba(255,255,255,.13);background:rgba(255,255,255,.075);color:inherit;font:600 12px system-ui,sans-serif;cursor:pointer;text-align:left;transition:transform .22s,background .22s,border-color .22s}
+.mws button:hover{background:rgba(255,255,255,.14);transform:translateY(-1px)}
+.mws button.on{border-color:var(--mw-accent);background:color-mix(in srgb,var(--mw-accent) 17%,rgba(255,255,255,.08));box-shadow:0 0 0 2px color-mix(in srgb,var(--mw-accent) 24%,transparent)}
+.mws .d{width:22px;height:22px;border-radius:50%;flex:none;border:1px solid rgba(255,255,255,.22);box-shadow:inset 0 1px 1px rgba(255,255,255,.45),0 2px 8px rgba(0,0,0,.4)}
+.mws .row{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.mws .row button{justify-content:center;text-align:center}
+.mws .mws-tab-form{display:grid;grid-template-columns:1fr 74px;gap:8px}
+.mws .mws-tab-form label{display:flex;flex-direction:column;gap:6px;color:#b8b8ce;font-size:11px;font-weight:700}
+.mws .mws-tab-form label:first-child{grid-column:1/2}
+.mws .mws-tab-form label:nth-child(2){grid-column:2/3}
+.mws input{box-sizing:border-box;width:100%;height:37px;min-width:0;padding:0 10px;border:1px solid rgba(255,255,255,.15);border-radius:11px;background:rgba(4,5,13,.72);color:#fff;font:600 13px system-ui,sans-serif;outline:0}
+.mws input:focus{border-color:var(--mw-accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--mw-accent) 25%,transparent)}
+.mws .mws-tab-form button{grid-column:1/-1;justify-content:center;background:color-mix(in srgb,var(--mw-accent) 24%,rgba(255,255,255,.08));border-color:color-mix(in srgb,var(--mw-accent) 55%,transparent);padding:10px}
+.mws .mws-hint{margin-top:8px;color:#a8a8c0;font-size:10.5px;line-height:1.5}
+.mws .foot{margin-top:15px;padding-top:12px;border-top:1px solid rgba(255,255,255,.1);font-size:10.5px;line-height:1.55;color:#a9aac0}
+.mws .saved{min-height:14px;margin-top:7px;color:#8ee6a3;font-size:10.5px}
+@media(prefers-reduced-motion:reduce){.mws,.mws-backdrop,.mws *{animation:none!important;transition:none!important}}
 `;
 
 let pop: HTMLDivElement | null = null;
+let settingsBackdrop: HTMLDivElement | null = null;
 function closeSettings() {
 	pop?.remove();
 	pop = null;
+	settingsBackdrop?.remove();
+	settingsBackdrop = null;
+	document.removeEventListener("keydown", onSettingsKeydown);
+}
+function onSettingsKeydown(event: KeyboardEvent) {
+	if (event.key === "Escape") closeSettings();
 }
 function toggleSettings(ev?: Event) {
 	ev?.stopPropagation();
 	if (pop) return closeSettings();
 	if (!document.getElementById("mws-css")) {
-		const s = document.createElement("style");
-		s.id = "mws-css";
-		s.textContent = SETTINGS_CSS;
-		document.head.appendChild(s);
+		const style = document.createElement("style");
+		style.id = "mws-css";
+		style.textContent = SETTINGS_CSS;
+		document.head.appendChild(style);
 	}
+
 	const T = (window as any).mwTheme;
+	const currentTab = activeTab();
+	const appearance = getTabAppearance(currentTab?.url ?? "");
+	const backdrop = document.createElement("div");
+	backdrop.className = "mws-backdrop";
+	backdrop.setAttribute("aria-hidden", "true");
+	backdrop.addEventListener("click", closeSettings);
+
 	const el = document.createElement("div");
 	el.className = "mws";
+	el.setAttribute("role", "dialog");
+	el.setAttribute("aria-label", "Browser settings");
 	el.innerHTML =
-		`<section><h3>Theme</h3><div class="g">` +
+		`<div class="mws-head"><strong>Browser settings</strong><button type="button" class="mws-close" aria-label="Close settings">×</button></div>` +
+		`<section><h3>Colorway</h3><div class="g">` +
 		Object.keys(T?.presets ?? {})
-			.map(
-				(id) =>
-					`<button data-theme="${id}"><span class="d" style="background:linear-gradient(135deg,${T.presets[id].g1},${T.presets[id].g2})"></span>${T.presets[id].n}</button>`
-			)
-			.join("") +
+			.map((id) =>
+				`<button type="button" data-theme="${id}"><span class="d" style="background:linear-gradient(135deg,${T.presets[id].g1},${T.presets[id].g2})"></span>${T.presets[id].n}</button>`
+			).join("") +
 		`</div></section><section><h3>Search engine</h3><div class="row">` +
 		Object.keys(ENGINES)
-			.map((k) => `<button data-engine="${k}">${ENGINES[k].n}</button>`)
+			.map((key) => `<button type="button" data-engine="${key}">${ENGINES[key].n}</button>`)
 			.join("") +
-		`</div></section><div class="foot">minason web v2</div>`;
-	const mark = () =>
-		el.querySelectorAll<HTMLElement>("button").forEach((b) =>
-			b.classList.toggle(
-				"on",
-				b.dataset.theme === T?.current || b.dataset.engine === engine()
-			)
-		);
-	el.onclick = (e) => {
-		const b = (e.target as HTMLElement).closest("button");
-		if (!b) return;
-		if (b.dataset.theme) T?.set(b.dataset.theme);
-		if (b.dataset.engine) ls.set("mw-engine", b.dataset.engine);
-		mark();
-	};
-	mark();
-	document.body.appendChild(el);
-	pop = el;
-	setTimeout(
-		() =>
-			document.addEventListener(
-				"click",
-				(e) => {
-					if (pop && !pop.contains(e.target as Node)) closeSettings();
-				},
-				{ once: true }
-			),
-		0
-	);
-}
+		`</div></section><section><h3>Current tab appearance</h3>
+			<form class="mws-tab-form">
+				<label>Tab name<input id="mws-tab-name" maxlength="36" placeholder="Use website title" value="${escapeHtml(appearance.name ?? "")}"></label>
+				<label>Icon<input id="mws-tab-icon" maxlength="4" placeholder="🌐" value="${escapeHtml(appearance.icon ?? "")}"></label>
+				<button type="submit">Save tab appearance</button>
+			</form>
+			<div class="mws-hint">Saved for this website on this device. Use an emoji or a short symbol for the icon.</div>
+			<div class="saved" aria-live="polite"></div>
+		</section>
+		<div class="foot">Website cookies and storage are kept in this browser profile. Nothing is uploaded to Minason. Clearing this site’s browser data can sign you out and reset settings.</div>`;
+	el.querySelector(".mws-close")!.addEventListener("click", closeSettings);
 
+	const mark = () => {
+		el.querySelectorAll<HTMLElement>("button").forEach((button) => {
+			button.classList.toggle(
+				"on",
+				button.dataset.theme === T?.current ||
+					button.dataset.engine === engine()
+			);
+		});
+	};
+	el.addEventListener("click", (event) => {
+		const button = (event.target as HTMLElement).closest("button");
+		if (!button) return;
+		if (button.dataset.theme) T?.set(button.dataset.theme);
+		if (button.dataset.engine) ls.set("mw-engine", button.dataset.engine);
+		mark();
+	});
+
+	el.querySelector<HTMLFormElement>(".mws-tab-form")!.addEventListener("submit", (event) => {
+		event.preventDefault();
+		const tab = activeTab();
+		if (!tab) return;
+		const name = el.querySelector<HTMLInputElement>("#mws-tab-name")!.value.trim().slice(0, 36);
+		const icon = [...el.querySelector<HTMLInputElement>("#mws-tab-icon")!.value.trim()].slice(0, 3).join("");
+		const key = tabAppearanceKey(tab.url);
+		const all = loadTabAppearances();
+		all[key] = { name, icon };
+		ls.set(TAB_APPEARANCE_KEY, JSON.stringify(all));
+		tab.title = name || tabTitleFor(tab.url);
+		tab.icon = icon || "🌐";
+		sync();
+		el.querySelector<HTMLElement>(".saved")!.textContent = "Saved on this device.";
+	});
+	mark();
+	document.body.append(backdrop, el);
+	settingsBackdrop = backdrop;
+	pop = el;
+	document.addEventListener("keydown", onSettingsKeydown);
+}
 
 /* ---------- Wisp connection panel ---------- */
 const WISP_PANEL_CSS = `
@@ -621,10 +759,27 @@ function toggleWispPanel(event?: Event) {
 	}, 0);
 }
 
+let lastWispRefresh = 0;
+function refreshActiveWispStatus() {
+	updateWispDot();
+	const now = Date.now();
+	if (now - lastWispRefresh < 10000) return;
+	const url = getActiveWispUrl(demoSettingsStore.wispUrl);
+	const status = getWispStatus(url);
+	if (status.state === "idle" || status.state === "failed") {
+		lastWispRefresh = now;
+		void connectWisp(url, 3000).finally(updateWispDot);
+	}
+}
 window.addEventListener("mw-wisp-status", () => {
 	updateWispDot();
 	if (wispPop) renderWispPanel(wispPop);
 });
+window.addEventListener("focus", refreshActiveWispStatus);
+document.addEventListener("visibilitychange", () => {
+	if (!document.hidden) refreshActiveWispStatus();
+});
+
 
 /* ---------- omnibox ---------- */
 export const Omnibox: Component = function (cx) {
@@ -673,15 +828,6 @@ export const Omnibox: Component = function (cx) {
 				<div class="omnibox-nav">
 					<button type="button" class="nav-btn" aria-label="Bookmark this page" on:click={() => addBookmark(browserState.url)}>
 						<span class="material-symbols-outlined">bookmark</span>
-					</button>
-					<button
-						type="button"
-						class="nav-btn"
-						aria-label="Open GeForce NOW directly in a new tab"
-						title="Launch GeForce NOW in a normal browser tab"
-						on:click={() => window.open("https://play.geforcenow.com", "_blank", "noopener,noreferrer")}
-					>
-						<span class="material-symbols-outlined">sports_esports</span>
 					</button>
 					<button
 						type="button"

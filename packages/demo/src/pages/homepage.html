@@ -57,7 +57,7 @@ form{width:min(580px,92vw)}
 </div>
 <main>
   <h1 class="brand">minason <span>web</span><i class="ver">v2</i></h1>
-  <p class="tag">Golden hour for browsing.</p>
+  <p class="tag">/*WELCOME_MESSAGE*/</p>
   <form id="f" autocomplete="off">
     <label class="search">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
@@ -84,12 +84,12 @@ c.onclick=function(){send({type:"mw-go",q:b.u})};box.appendChild(c)});
 var a=document.createElement("button");a.className="chip add";a.type="button";a.textContent="+  Add";a.onclick=function(){send({type:"mw-add-bm"})};box.appendChild(a)}
 chips([]);
 
-/* smooth reactive grid: spring field + click ripples */
+/* springy reactive grid with a bright cursor field and trailing ripples */
 var canvas=$("grid"),ctx=canvas&&canvas.getContext("2d"),W=0,H=0,D=[],ripples=[];
-var spacing=30,dpr=1,pointer={x:-1000,y:-1000},lastFrame=0;
+var spacing=28,dpr=1,pointer={x:-1000,y:-1000},lastPointer=null,lastRippleAt=0,lastFrame=0;
 var reduceMotion=!!(window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches);
 function resizeGrid(){
-  dpr=Math.min(window.devicePixelRatio||1,1.65);
+  dpr=Math.min(window.devicePixelRatio||1,1.6);
   W=window.innerWidth;H=window.innerHeight;
   canvas.width=Math.round(W*dpr);canvas.height=Math.round(H*dpr);
   ctx.setTransform(dpr,0,0,dpr,0,0);
@@ -99,47 +99,42 @@ function resizeGrid(){
       D.push({hx:x0,hy:y,x:x0,y:y,vx:0,vy:0});
     }
   }
-  drawGrid(0,true);
+  renderGrid(0);
 }
-function drawGrid(now,staticOnly){
+function addRipple(x,y,power){
+  ripples.push({x:x,y:y,time:performance.now(),power:power||1});
+  if(ripples.length>14)ripples.shift();
+}
+function renderGrid(now){
   if(!ctx)return;
   ctx.clearRect(0,0,W,H);
-  var col="rgb("+rgb[0]+","+rgb[1]+","+rgb[2]+")";
-  ripples=ripples.filter(function(r){return now-r.time<1350});
+  var color="rgb("+rgb[0]+","+rgb[1]+","+rgb[2]+")";
+  ripples=ripples.filter(function(r){return now-r.time<1650});
   for(var i=0;i<D.length;i++){
-    var p=D[i];
-    var targetY=p.hy+Math.sin(now*.00048+p.hx*.008+p.hy*.006)*1.15;
-    var ax=(p.hx-p.x)*.045,ay=(targetY-p.y)*.045;
-    var dx=p.x-pointer.x,dy=p.y-pointer.y,dist=Math.sqrt(dx*dx+dy*dy)||1;
-    var mouseGlow=0;
-    if(dist<190){
-      var f=1-dist/190;mouseGlow=f*f;
-      var push=mouseGlow*.38;
-      ax+=(dx/dist)*push-(dy/dist)*push*.24;
-      ay+=(dy/dist)*push+(dx/dist)*push*.24;
-    }
+    var p=D[i],dx=p.x-pointer.x,dy=p.y-pointer.y;
+    var dist=Math.sqrt(dx*dx+dy*dy)||1;
+    var cursorGlow=dist<250?Math.pow(1-dist/250,2.15):0;
     var rippleGlow=0;
     for(var k=0;k<ripples.length;k++){
       var r=ripples[k],age=now-r.time,rx=p.hx-r.x,ry=p.hy-r.y;
-      var rd=Math.sqrt(rx*rx+ry*ry)||1,diff=rd-age*.43;
-      var wave=Math.exp(-(diff*diff)/720)*(1-age/1350)*r.power;
-      if(wave>.004){
-        ax+=(rx/rd)*wave*.62;ay+=(ry/rd)*wave*.62;
-        rippleGlow=Math.max(rippleGlow,wave);
-      }
+      var rd=Math.sqrt(rx*rx+ry*ry)||1;
+      var ring=age*.68;
+      var wave=Math.exp(-Math.pow((rd-ring)/21,2))*(1-age/1650)*r.power;
+      if(wave>rippleGlow)rippleGlow=wave;
     }
-    if(!staticOnly){
-      p.vx=(p.vx+ax)*.865;p.vy=(p.vy+ay)*.865;
-      p.x+=p.vx;p.y+=p.vy;
-    }else{p.x=p.hx;p.y=p.hy}
-    var moved=Math.sqrt((p.x-p.hx)*(p.x-p.hx)+(p.y-p.hy)*(p.y-p.hy));
-    var glow=Math.min(1,Math.max(mouseGlow,rippleGlow,moved/24));
-    ctx.globalAlpha=.19+glow*.7;
-    ctx.fillStyle=glow>.035?col:"#c5c5e4";
-    ctx.shadowColor=col;ctx.shadowBlur=glow>.4?7+glow*7:0;
-    ctx.beginPath();ctx.arc(p.x,p.y,.85+glow*1.45,0,Math.PI*2);ctx.fill();
+    var motion=Math.min(1,Math.hypot(p.x-p.hx,p.y-p.hy)/25);
+    var glow=Math.min(1,Math.max(cursorGlow*1.35,rippleGlow*1.3,motion*.8));
+    ctx.globalAlpha=.16+glow*.82;
+    ctx.fillStyle=glow>.025?color:"#c5c5e4";
+    ctx.shadowColor=color;
+    ctx.shadowBlur=glow>.06?Math.min(25,glow*27):0;
+    var radius=.8+glow*1.65;
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,radius,0,Math.PI*2);
+    ctx.fill();
   }
-  ctx.shadowBlur=0;ctx.globalAlpha=1;
+  ctx.shadowBlur=0;
+  ctx.globalAlpha=1;
 }
 function animateGrid(now){
   if(document.hidden)return;
@@ -148,39 +143,56 @@ function animateGrid(now){
   if(!reduceMotion){
     for(var i=0;i<D.length;i++){
       var p=D[i];
-      var targetY=p.hy+Math.sin(now*.00048+p.hx*.008+p.hy*.006)*1.15;
-      var ax=(p.hx-p.x)*.045,ay=(targetY-p.y)*.045;
-      var dx=p.x-pointer.x,dy=p.y-pointer.y,dist=Math.sqrt(dx*dx+dy*dy)||1;
-      if(dist<190){
-        var f=1-dist/190,push=f*f*.38;
-        ax+=(dx/dist)*push-(dy/dist)*push*.24;
-        ay+=(dy/dist)*push+(dx/dist)*push*.24;
+      var targetY=p.hy+Math.sin(now*.00052+p.hx*.008+p.hy*.006)*1.05;
+      var ax=(p.hx-p.x)*.038,ay=(targetY-p.y)*.038;
+      var dx=p.x-pointer.x,dy=p.y-pointer.y;
+      var dist=Math.sqrt(dx*dx+dy*dy)||1;
+      if(dist<250){
+        var f=1-dist/250;
+        var force=f*f*.95;
+        ax+=(dx/dist)*force-(dy/dist)*force*.18;
+        ay+=(dy/dist)*force+(dx/dist)*force*.18;
       }
       for(var k=0;k<ripples.length;k++){
         var r=ripples[k],age=now-r.time,rx=p.hx-r.x,ry=p.hy-r.y;
-        var rd=Math.sqrt(rx*rx+ry*ry)||1,diff=rd-age*.43;
-        var wave=Math.exp(-(diff*diff)/720)*(1-age/1350)*r.power;
-        if(wave>.004){ax+=(rx/rd)*wave*.62;ay+=(ry/rd)*wave*.62}
+        var rd=Math.sqrt(rx*rx+ry*ry)||1;
+        var wave=Math.exp(-Math.pow((rd-age*.68)/21,2))*(1-age/1650)*r.power;
+        if(wave>.003){
+          ax+=(rx/rd)*wave*.84;
+          ay+=(ry/rd)*wave*.84;
+        }
       }
-      p.vx=(p.vx+ax*dt)*Math.pow(.865,dt);
-      p.vy=(p.vy+ay*dt)*Math.pow(.865,dt);
-      p.x+=p.vx*dt;p.y+=p.vy*dt;
+      p.vx=(p.vx+ax*dt)*Math.pow(.855,dt);
+      p.vy=(p.vy+ay*dt)*Math.pow(.855,dt);
+      p.x+=p.vx*dt;
+      p.y+=p.vy*dt;
     }
-    drawGrid(now,true);
   }
+  renderGrid(now);
   requestAnimationFrame(animateGrid);
 }
 if(ctx){
   resizeGrid();
   window.addEventListener("resize",resizeGrid,{passive:true});
-  window.addEventListener("pointermove",function(e){pointer.x=e.clientX;pointer.y=e.clientY},{passive:true});
-  window.addEventListener("pointerout",function(e){if(!e.relatedTarget){pointer.x=-1000;pointer.y=-1000}},{passive:true});
-  window.addEventListener("pointerdown",function(e){
-    ripples.push({x:e.clientX,y:e.clientY,time:performance.now(),power:1});
-    if(ripples.length>5)ripples.shift();
+  window.addEventListener("pointermove",function(e){
+    pointer.x=e.clientX;pointer.y=e.clientY;
+    if(lastPointer){
+      var distance=Math.hypot(e.clientX-lastPointer.x,e.clientY-lastPointer.y);
+      if(distance>18&&performance.now()-lastRippleAt>28){
+        addRipple(lastPointer.x,lastPointer.y,Math.min(1.25,.55+distance/130));
+        lastRippleAt=performance.now();
+      }
+    }
+    lastPointer={x:e.clientX,y:e.clientY};
   },{passive:true});
-  document.addEventListener("visibilitychange",function(){if(!document.hidden){lastFrame=0;requestAnimationFrame(animateGrid)}});
-  if(reduceMotion)drawGrid(0,true);
+  window.addEventListener("pointerout",function(e){
+    if(!e.relatedTarget){pointer.x=-1000;pointer.y=-1000;lastPointer=null;}
+  },{passive:true});
+  window.addEventListener("pointerdown",function(e){addRipple(e.clientX,e.clientY,1.55);},{passive:true});
+  document.addEventListener("visibilitychange",function(){
+    if(!document.hidden){lastFrame=0;requestAnimationFrame(animateGrid);}
+  });
+  if(reduceMotion)renderGrid(0);
   else requestAnimationFrame(animateGrid);
 }
 
