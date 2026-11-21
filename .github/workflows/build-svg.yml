@@ -1,0 +1,54 @@
+name: Build Minason Web v2 SVG bundle
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: build-svg
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          targets: wasm32-unknown-unknown
+          components: rust-src
+      - run: sudo apt-get update && sudo apt-get install -y binaryen
+      - name: Restore cached Rust tools
+        id: rust-tools
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/wasm-snip
+            ~/.cargo/bin/wasm-bindgen
+            ~/.cargo/bin/wasm-bindgen-test-runner
+            ~/.cargo/bin/wasm2es6js
+          key: rust-tools-${{ runner.os }}-bindgen-0.2.105-snip-r58playz-v1
+      - name: Install Rust tools (only when not cached)
+        if: steps.rust-tools.outputs.cache-hit != 'true'
+        run: |
+          cargo install --git https://github.com/r58playz/wasm-snip
+          cargo install wasm-bindgen-cli --version 0.2.105 --locked
+      - run: pnpm install --frozen-lockfile
+      - run: RELEASE=1 pnpm rewriter:build
+        working-directory: packages/core
+      - run: pnpm -r --if-present build
+      - name: Build SVG edition
+        working-directory: packages/demo
+        run: |
+          pnpm exec vite build --config vite.config.svg.ts
+          node scripts/make-svg.mjs dist-svg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: minason-web-v2-svg
+          path: packages/demo/dist-svg
+          if-no-files-found: error
