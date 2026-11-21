@@ -583,7 +583,10 @@ const WISP_PANEL_CSS = `
 .mww-engine{justify-content:center;text-align:center;padding:9px 8px!important}
 .mww-engine.selected{border-color:var(--mw-accent,#8f7cff);background:color-mix(in srgb,var(--mw-accent,#8f7cff) 17%,transparent)}
 @keyframes mww-pulse{50%{opacity:.35;box-shadow:0 0 2px currentColor}}
-@media(prefers-reduced-motion:reduce){.mww,.mww *{animation:none!important;transition:none!important}}
+@media(max-width:720px){.mww{top:82px;right:8px;width:calc(100vw - 16px);max-height:calc(100dvh - 94px);padding:13px;border-radius:20px}.mww-item{grid-template-columns:8px minmax(0,1fr) auto;gap:7px;padding:8px}.mww-actions{gap:4px}.mww button{padding:6px 7px;font-size:10px}}
+@media(max-width:420px){.mww-engines{grid-template-columns:1fr}.mww-head strong{font-size:13px}}
+@media(max-height:620px){.mww{top:76px;max-height:calc(100dvh - 86px);padding:12px}.mww-section{margin-top:10px;padding-top:9px}}
+@media(prefers-reduced-motion:reduce){.mww,.mww-backdrop,.mww *{animation:none!important;transition:none!important}}
 `;
 
 let wispPop: HTMLDivElement | null = null;
