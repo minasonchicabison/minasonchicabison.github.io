@@ -418,7 +418,7 @@ function initTabs(el: HTMLElement) {
 /* ---------- browser settings ---------- */
 const SETTINGS_CSS = `
 .mws-backdrop{position:fixed;inset:0;z-index:2147482998;background:rgba(2,3,10,.48);backdrop-filter:blur(4px) saturate(115%);-webkit-backdrop-filter:blur(4px) saturate(115%);animation:mws-fade .18s ease}
-.mws{position:fixed;top:88px;right:12px;z-index:2147483000;width:min(360px,calc(100vw - 24px));max-height:calc(100vh - 104px);overflow:auto;padding:18px;border-radius:26px;border:1px solid rgba(255,255,255,.19);background:rgba(17,18,31,.97);backdrop-filter:blur(38px) saturate(180%);-webkit-backdrop-filter:blur(38px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 30px 90px rgba(0,0,0,.78),0 0 38px color-mix(in srgb,var(--mw-accent,#8f7cff) 14%,transparent);color:#f5f5ff;font:500 13px "Manrope Variable",Manrope,system-ui,sans-serif;transform-origin:top right;animation:mws-in .34s cubic-bezier(.2,1.25,.35,1)}
+.mws{position:fixed;top:88px;right:12px;z-index:2147483000;width:min(360px,calc(100vw - 24px));max-height:calc(100dvh - 104px);overflow:auto;padding:18px;border-radius:26px;border:1px solid rgba(255,255,255,.19);background:rgba(17,18,31,.97);backdrop-filter:blur(38px) saturate(180%);-webkit-backdrop-filter:blur(38px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 30px 90px rgba(0,0,0,.78),0 0 38px color-mix(in srgb,var(--mw-accent,#8f7cff) 14%,transparent);color:#f5f5ff;font:500 13px "Manrope Variable",Manrope,system-ui,sans-serif;transform-origin:top right;animation:mws-in .34s cubic-bezier(.2,1.25,.35,1)}
 @keyframes mws-fade{from{opacity:0}to{opacity:1}}
 @keyframes mws-in{from{transform:translateY(-10px) scale(.96);opacity:0;filter:blur(8px)}to{transform:translateY(0) scale(1);opacity:1;filter:none}}
 .mws-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:15px}
@@ -441,6 +441,8 @@ const SETTINGS_CSS = `
 .mws .mws-hint{margin-top:8px;color:#a8a8c0;font-size:10.5px;line-height:1.5}
 .mws .foot{margin-top:15px;padding-top:12px;border-top:1px solid rgba(255,255,255,.1);font-size:10.5px;line-height:1.55;color:#a9aac0}
 .mws .saved{min-height:14px;margin-top:7px;color:#8ee6a3;font-size:10.5px}
+@media(max-width:720px){.mws{top:82px;right:8px;width:calc(100vw - 16px);max-height:calc(100dvh - 94px);padding:15px;border-radius:21px}}
+@media(max-height:620px){.mws{top:76px;max-height:calc(100dvh - 86px);padding:13px}.mws section+section{margin-top:12px;padding-top:11px}}
 @media(prefers-reduced-motion:reduce){.mws,.mws-backdrop,.mws *{animation:none!important;transition:none!important}}
 `;
 
