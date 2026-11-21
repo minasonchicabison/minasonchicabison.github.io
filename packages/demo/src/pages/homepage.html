@@ -169,7 +169,7 @@ function renderGrid(now){
     ctx.shadowColor=color;
     ctx.shadowBlur=glow>.035?3+glow*9:0;
     ctx.beginPath();
-    ctx.arc(x,y,.85+glow*.58+Math.min(.18,offset*.1),0,Math.PI*2);
+    ctx.arc(x,y,.85+glow*.58,0,Math.PI*2);
     ctx.fill();
   }
   ctx.shadowBlur=0;
