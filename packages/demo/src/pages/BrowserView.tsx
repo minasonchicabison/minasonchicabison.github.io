@@ -620,11 +620,10 @@ function hideWispHint() {
 	wispHintEl = null;
 }
 
-function maybeShowWispHint(state: string) {
-	if (wispHintShown || wispHintTimer || wispPop) return;
-	if (state !== "failed" && state !== "idle") return;
+function maybeShowWispHint(retry = 0) {
+	if (wispHintShown || wispHintTimer || wispPop || wispHintEl) return;
 	try {
-		if (sessionStorage.getItem("mw-wisp-hint-seen") === "1") {
+		if (sessionStorage.getItem("mw-wisp-hint-seen-v2") === "1") {
 			wispHintShown = true;
 			return;
 		}
@@ -632,10 +631,19 @@ function maybeShowWispHint(state: string) {
 
 	wispHintTimer = window.setTimeout(() => {
 		wispHintTimer = 0;
-		const current = getWispStatus(getActiveWispUrl(demoSettingsStore.wispUrl)).state;
-		if ((current !== "failed" && current !== "idle") || wispPop) return;
+		if (wispHintShown || wispPop) return;
 		const dot = document.getElementById("mw-wisp-dot");
-		if (!dot?.isConnected) return;
+		// Wisp can initialize before the toolbar is mounted. Retry briefly
+		// instead of silently abandoning the hint when the dot is not in the DOM yet.
+		if (!dot?.isConnected) {
+			if (retry < 20) {
+				wispHintTimer = window.setTimeout(() => {
+					wispHintTimer = 0;
+					maybeShowWispHint(retry + 1);
+				}, 250);
+			}
+			return;
+		}
 
 		const rect = dot.getBoundingClientRect();
 		const left = Math.min(Math.max(8, rect.left - 8), Math.max(8, window.innerWidth - 228));
@@ -645,13 +653,13 @@ function maybeShowWispHint(state: string) {
 		hint.textContent = "If this dot is red, click it.";
 		hint.setAttribute("role", "status");
 		hint.style.left = left + "px";
-		hint.style.top = Math.min(rect.bottom + 11, window.innerHeight - 58) + "px";
+		hint.style.top = Math.max(8, Math.min(rect.bottom + 11, window.innerHeight - 58)) + "px";
 		hint.style.setProperty("--mw-arrow-left", arrow + "px");
 		ensureWispHintStyles();
 		document.body.appendChild(hint);
 		wispHintEl = hint;
 		wispHintShown = true;
-		try { sessionStorage.setItem("mw-wisp-hint-seen", "1"); } catch {}
+		try { sessionStorage.setItem("mw-wisp-hint-seen-v2", "1"); } catch {}
 		wispHintHideTimer = window.setTimeout(hideWispHint, 6500);
 	}, 1400);
 }
@@ -662,7 +670,10 @@ function onWispKeydown(event: KeyboardEvent) {
 
 function updateWispDot() {
 	const dot = document.getElementById("mw-wisp-dot");
-	if (!dot) return;
+	if (!dot) {
+		maybeShowWispHint();
+		return;
+	}
 	const active = getActiveWispUrl(demoSettingsStore.wispUrl);
 	const state = getWispStatus(active).state;
 	dot.classList.toggle("connected", state === "connected");
@@ -673,7 +684,7 @@ function updateWispDot() {
 		"Wisp connection: " + state + ". Open Wisp connections."
 	);
 	dot.setAttribute("title", "Wisp: " + state + " · Manage connections");
-	maybeShowWispHint(state);
+	maybeShowWispHint();
 }
 
 function renderWispPanel(panel: HTMLDivElement) {
@@ -770,7 +781,7 @@ function toggleWispPanel(event?: Event) {
 	event?.stopPropagation();
 	hideWispHint();
 	wispHintShown = true;
-	try { sessionStorage.setItem("mw-wisp-hint-seen", "1"); } catch {}
+	try { sessionStorage.setItem("mw-wisp-hint-seen-v2", "1"); } catch {}
 	if (wispPop) {
 		closeWispPanel();
 		return;
