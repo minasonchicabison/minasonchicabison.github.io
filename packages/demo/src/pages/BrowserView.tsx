@@ -459,6 +459,7 @@ function onSettingsKeydown(event: KeyboardEvent) {
 function toggleSettings(ev?: Event) {
 	ev?.stopPropagation();
 	if (pop) return closeSettings();
+	if (wispPop) closeWispPanel();
 	if (!document.getElementById("mws-css")) {
 		const style = document.createElement("style");
 		style.id = "mws-css";
@@ -550,7 +551,9 @@ async function rebindTransportToActiveWisp() {
 
 /* ---------- Wisp connection panel ---------- */
 const WISP_PANEL_CSS = `
-.mww{position:fixed;top:96px;right:14px;z-index:2147483000;width:min(390px,calc(100vw - 28px));max-height:min(76vh,620px);overflow:auto;padding:16px;border-radius:25px;border:1px solid rgba(255,255,255,.14);background:rgba(20,20,34,.78);backdrop-filter:blur(34px) saturate(190%);-webkit-backdrop-filter:blur(34px) saturate(190%);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 28px 70px rgba(0,0,0,.58);color:#ececf6;font:500 12.5px "Manrope Variable",Manrope,system-ui,sans-serif;transform-origin:top right;animation:mww-in .42s cubic-bezier(.2,1.3,.35,1)}
+.mww-backdrop{position:fixed;inset:0;z-index:2147482998;background:rgba(2,3,10,.46);backdrop-filter:blur(4px) saturate(115%);-webkit-backdrop-filter:blur(4px) saturate(115%);animation:mww-fade .18s ease}
+.mww{position:fixed;top:88px;right:clamp(8px,1.2vw,16px);z-index:2147483000;width:min(410px,calc(100vw - 24px));max-height:min(76dvh,620px);overflow:auto;padding:clamp(12px,1.2vw,18px);border-radius:25px;border:1px solid rgba(255,255,255,.14);background:rgba(20,20,34,.9);backdrop-filter:blur(34px) saturate(190%);-webkit-backdrop-filter:blur(34px) saturate(190%);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 28px 70px rgba(0,0,0,.58);color:#ececf6;font:500 12.5px "Manrope Variable",Manrope,system-ui,sans-serif;transform-origin:top right;animation:mww-in .42s cubic-bezier(.2,1.3,.35,1)}
+@keyframes mww-fade{from{opacity:0}to{opacity:1}}
 @keyframes mww-in{from{transform:translateY(-9px) scale(.94);opacity:0;filter:blur(8px)}to{transform:translateY(0) scale(1);opacity:1;filter:none}}
 .mww-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:14px}
 .mww-head strong{display:block;font-size:14px;font-weight:800;letter-spacing:-.02em}
@@ -582,7 +585,75 @@ const WISP_PANEL_CSS = `
 `;
 
 let wispPop: HTMLDivElement | null = null;
-let wispOutside: ((event: PointerEvent) => void) | null = null;
+let wispBackdrop: HTMLDivElement | null = null;
+let wispHintTimer = 0;
+let wispHintHideTimer = 0;
+let wispHintShown = false;
+let wispHintEl: HTMLDivElement | null = null;
+
+const WISP_HINT_CSS = `
+#mw-wisp-hint{position:fixed;z-index:2147483002;width:220px;max-width:calc(100vw - 24px);padding:10px 13px;border:1px solid rgba(255,255,255,.17);border-radius:13px;background:rgba(19,20,34,.97);box-shadow:0 12px 34px rgba(0,0,0,.42),0 0 24px -10px var(--mw-accent,#8f7cff);color:#f5f3ff;font:700 11px/1.4 "Manrope Variable",Manrope,system-ui,sans-serif;pointer-events:none;animation:mww-hint-in .28s cubic-bezier(.2,1.2,.35,1)}
+#mw-wisp-hint:before{content:"";position:absolute;top:-6px;left:var(--mw-arrow-left,18px);width:11px;height:11px;transform:rotate(45deg);border-left:1px solid rgba(255,255,255,.17);border-top:1px solid rgba(255,255,255,.17);background:rgba(19,20,34,.97)}
+@keyframes mww-hint-in{from{opacity:0;transform:translateY(-5px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
+@media(prefers-reduced-motion:reduce){#mw-wisp-hint{animation:none}}
+`;
+
+function ensureWispHintStyles() {
+	if (document.getElementById("mw-wisp-hint-css")) return;
+	const style = document.createElement("style");
+	style.id = "mw-wisp-hint-css";
+	style.textContent = WISP_HINT_CSS;
+	document.head.appendChild(style);
+}
+
+function hideWispHint() {
+	window.clearTimeout(wispHintTimer);
+	window.clearTimeout(wispHintHideTimer);
+	wispHintTimer = 0;
+	wispHintHideTimer = 0;
+	wispHintEl?.remove();
+	wispHintEl = null;
+}
+
+function maybeShowWispHint(state: string) {
+	if (wispHintShown || wispHintTimer || wispPop) return;
+	if (state !== "failed" && state !== "idle") return;
+	try {
+		if (sessionStorage.getItem("mw-wisp-hint-seen") === "1") {
+			wispHintShown = true;
+			return;
+		}
+	} catch {}
+
+	wispHintTimer = window.setTimeout(() => {
+		wispHintTimer = 0;
+		const current = getWispStatus(getActiveWispUrl(demoSettingsStore.wispUrl)).state;
+		if ((current !== "failed" && current !== "idle") || wispPop) return;
+		const dot = document.getElementById("mw-wisp-dot");
+		if (!dot?.isConnected) return;
+
+		const rect = dot.getBoundingClientRect();
+		const left = Math.min(Math.max(8, rect.left - 8), Math.max(8, window.innerWidth - 228));
+		const arrow = Math.max(16, Math.min(204, rect.left + rect.width / 2 - left));
+		const hint = document.createElement("div");
+		hint.id = "mw-wisp-hint";
+		hint.textContent = "If this dot is red, click it.";
+		hint.setAttribute("role", "status");
+		hint.style.left = left + "px";
+		hint.style.top = Math.min(rect.bottom + 11, window.innerHeight - 58) + "px";
+		hint.style.setProperty("--mw-arrow-left", arrow + "px");
+		ensureWispHintStyles();
+		document.body.appendChild(hint);
+		wispHintEl = hint;
+		wispHintShown = true;
+		try { sessionStorage.setItem("mw-wisp-hint-seen", "1"); } catch {}
+		wispHintHideTimer = window.setTimeout(hideWispHint, 6500);
+	}, 1400);
+}
+
+function onWispKeydown(event: KeyboardEvent) {
+	if (event.key === "Escape") closeWispPanel();
+}
 
 function updateWispDot() {
 	const dot = document.getElementById("mw-wisp-dot");
@@ -597,6 +668,7 @@ function updateWispDot() {
 		"Wisp connection: " + state + ". Open Wisp connections."
 	);
 	dot.setAttribute("title", "Wisp: " + state + " · Manage connections");
+	maybeShowWispHint(state);
 }
 
 function renderWispPanel(panel: HTMLDivElement) {
@@ -683,14 +755,17 @@ function renderWispPanel(panel: HTMLDivElement) {
 function closeWispPanel() {
 	wispPop?.remove();
 	wispPop = null;
-	if (wispOutside) {
-		document.removeEventListener("pointerdown", wispOutside);
-		wispOutside = null;
-	}
+	wispBackdrop?.remove();
+	wispBackdrop = null;
+	document.removeEventListener("keydown", onWispKeydown);
+	hideWispHint();
 }
 
 function toggleWispPanel(event?: Event) {
 	event?.stopPropagation();
+	hideWispHint();
+	wispHintShown = true;
+	try { sessionStorage.setItem("mw-wisp-hint-seen", "1"); } catch {}
 	if (wispPop) {
 		closeWispPanel();
 		return;
@@ -755,22 +830,14 @@ function toggleWispPanel(event?: Event) {
 			window.location.reload();
 		});
 	});
-	document.body.appendChild(panel);
+	const backdrop = document.createElement("div");
+	backdrop.className = "mww-backdrop";
+	backdrop.addEventListener("click", closeWispPanel);
+	wispBackdrop = backdrop;
+	document.body.append(backdrop, panel);
 	wispPop = panel;
+	document.addEventListener("keydown", onWispKeydown);
 	renderWispPanel(panel);
-
-	wispOutside = (event: PointerEvent) => {
-		if (
-			wispPop &&
-			!wispPop.contains(event.target as Node) &&
-			event.target !== document.getElementById("mw-wisp-dot")
-		) {
-			closeWispPanel();
-		}
-	};
-	setTimeout(() => {
-		if (wispOutside) document.addEventListener("pointerdown", wispOutside);
-	}, 0);
 }
 
 let lastWispRefresh = 0;
@@ -977,6 +1044,27 @@ Omnibox.style = css`
 	}
 	.url-input::placeholder {
 		color: var(--mw-mut, #9a9ab4);
+	}
+	.nav-btn { flex: none; }
+	@media (max-width: 900px) {
+		.browser-omnibox-shell { gap: 0.25em; }
+		.omnibox-nav { gap: 0; }
+		.nav-btn { width: 1.9em; height: 1.9em; }
+		.url-dot { margin-left: 10px; margin-right: 8px; }
+	}
+	@media (max-width: 640px) {
+		:scope { padding: 3px 6px 6px; }
+		.browser-omnibox-shell { gap: 2px; }
+		.nav-btn { width: 1.72em; height: 1.82em; }
+		.browser-omnibox-shell .material-symbols-outlined { font-size: 17px !important; }
+		.url-dot { width: 8px; height: 8px; min-width: 8px; margin: 0 7px 0 8px; }
+		.url-input { font-size: 0.84em; padding-right: 7px !important; }
+	}
+	@media (max-width: 390px) {
+		.nav-btn { width: 1.58em; height: 1.75em; }
+		.browser-omnibox-shell .material-symbols-outlined { font-size: 16px !important; }
+		.url-dot { margin-right: 6px; margin-left: 6px; }
+		.url-input { font-size: 0.8em; }
 	}
 `;
 
