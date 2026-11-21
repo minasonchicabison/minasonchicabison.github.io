@@ -90,6 +90,33 @@ form{width:min(580px,92vw)}
 @keyframes di-loader-sweep{to{transform:translateX(350%)}}
 @media(prefers-reduced-motion:reduce){#mwi,.ly,.di-content,.di-loader,.di-progress,.di-live,.di-shine,.di-loader-orbit,.di-loader-bar span{transition:none!important;animation:none!important}}
 @media (max-width:700px){.ver{right:-8px;top:-34px}}
+@media (max-width:560px){
+  main{padding:0 14px 26px}
+  .brand{font-size:clamp(43px,11.5vw,68px)}
+  .ver{right:-4px;top:-29px;padding:5px 9px;font-size:14px}
+  .tag{margin:10px 0 20px;font-size:13px;text-align:center}
+  form{width:min(580px,94vw)}
+  .search{height:50px;padding:0 15px;gap:9px}
+  .search input{font-size:14px}
+  .bm{margin-top:22px}
+  .chips{gap:7px}
+  .chip{height:36px;padding:0 12px;font-size:12px}
+  #mwi{top:8px}
+}
+@media (max-width:380px){
+  main{padding-left:10px;padding-right:10px}
+  .brand{font-size:clamp(40px,10.8vw,48px)}
+  .ver{right:-8px;top:-26px;font-size:12px;padding:4px 8px}
+  .tag{font-size:12px}
+  .chip{height:34px;padding:0 10px;font-size:11px}
+}
+@media (max-height:650px){
+  main{padding-bottom:14px}
+  .tag{margin-top:8px;margin-bottom:16px}
+  .bm{margin-top:16px}
+  .bm h2{margin-bottom:8px}
+  .chip{height:35px}
+}
 @media (prefers-reduced-motion:reduce){*{transition-duration:.01ms!important}}
 </style>
 </head>
