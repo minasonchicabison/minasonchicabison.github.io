@@ -122,13 +122,75 @@ function addBookmark(input: string) {
 const svc = {
 	bat: null as null | { level: number; charging: boolean },
 	wx: null as null | { temp: number; code: number; day: boolean; city: string },
+	activeUsers: null as number | null,
 	started: false,
 };
 let refreshWeatherNow: (() => void) | null = null;
 
+// Create a free Simple Presence app at https://simple-presence.erickr.dev/dashboard
+// and put its public, read-only app key here. This key is safe to expose in browser code.
+const SIMPLE_PRESENCE_APP_KEY = "YOUR_SIMPLE_PRESENCE_APP_KEY";
+let presenceSdkPromise: Promise<any> | null = null;
+let presenceClient: { getCount(): number; destroy(): void } | null = null;
+
+function loadPresenceSdk(): Promise<any> {
+	const existing = (window as any).SimplePresence;
+	if (existing?.SimplePresence) return Promise.resolve(existing);
+	if (presenceSdkPromise) return presenceSdkPromise;
+
+	presenceSdkPromise = new Promise((resolve, reject) => {
+		const script = document.createElement("script");
+		script.src = "https://unpkg.com/@simple-presence/core@0.3.3";
+		script.async = true;
+		script.onload = () => {
+			const sdk = (window as any).SimplePresence;
+			if (sdk?.SimplePresence) resolve(sdk);
+			else reject(new Error("Simple Presence SDK loaded without its browser API"));
+		};
+		script.onerror = () => reject(new Error("Simple Presence SDK could not be loaded"));
+		document.head.appendChild(script);
+	});
+	return presenceSdkPromise;
+}
+
+async function startPresence() {
+	if (presenceClient) return;
+	if (!SIMPLE_PRESENCE_APP_KEY || SIMPLE_PRESENCE_APP_KEY === "YOUR_SIMPLE_PRESENCE_APP_KEY") {
+		console.info("Minason Web: add the Simple Presence app key to enable the live active-users count.");
+		return;
+	}
+
+	try {
+		const sdk = await loadPresenceSdk();
+		const Client = sdk.SimplePresence;
+		presenceClient = new Client({
+			tag: "minason-web-home",
+			appKey: SIMPLE_PRESENCE_APP_KEY,
+			onCountChange: (count: number) => {
+				if (!Number.isFinite(count)) return;
+				svc.activeUsers = Math.max(0, Math.floor(count));
+				pushAll();
+			},
+		});
+		const initialCount = presenceClient.getCount();
+		if (Number.isFinite(initialCount)) {
+			svc.activeUsers = Math.max(0, Math.floor(initialCount));
+			pushAll();
+		}
+	} catch (error) {
+		console.warn("Minason Web: live active-users count is unavailable.", error);
+	}
+}
+
+window.addEventListener("pagehide", () => {
+	presenceClient?.destroy();
+	presenceClient = null;
+}, { once: true });
+
 function startServices() {
 	if (svc.started) return;
 	svc.started = true;
+	void startPresence();
 
 	try {
 		const getBattery = (navigator as any).getBattery;
@@ -258,7 +320,7 @@ const activeTab = () => tabs.find((t) => t.id === activeId);
 
 function pushTo(t: Tab) {
 	t.iframe.contentWindow?.postMessage(
-		{ type: "mw-state", vars: themeVars(), bm: loadBm(), bat: svc.bat, wx: svc.wx },
+		{ type: "mw-state", vars: themeVars(), bm: loadBm(), bat: svc.bat, wx: svc.wx, activeUsers: svc.activeUsers },
 		"*"
 	);
 }
