@@ -89,6 +89,34 @@ form{width:min(580px,92vw)}
 @keyframes di-orbit{to{transform:rotate(360deg)}}
 @keyframes di-loader-sweep{to{transform:translateX(350%)}}
 @media(prefers-reduced-motion:reduce){#mwi,.ly,.di-content,.di-loader,.di-progress,.di-live,.di-shine,.di-loader-orbit,.di-loader-bar span{transition:none!important;animation:none!important}}
+/* iOS-style charging expansion */
+#mwi.is-charging-alert{
+  width:min(350px,calc(100vw - 24px))!important;
+  height:82px!important;
+  border-radius:27px!important;
+  border-color:rgba(100,238,178,.42);
+  background:linear-gradient(135deg,rgba(18,35,36,.99),rgba(5,12,20,.995));
+  box-shadow:0 18px 54px rgba(0,0,0,.58),0 0 42px rgba(54,224,150,.17),inset 0 1px 0 rgba(255,255,255,.13);
+}
+#mw-charge-view{position:absolute;inset:0;display:none;align-items:center;gap:14px;padding:13px 17px;box-sizing:border-box;color:#fff}
+#mwi.is-charging-alert #mw-charge-view{display:flex}
+#mwi.is-charging-alert #mwc,#mwi.is-charging-alert #mwe{opacity:0;pointer-events:none}
+.mw-charge-icon{width:48px;height:48px;display:grid;place-items:center;flex:none;border:1px solid rgba(95,240,171,.2);border-radius:17px;background:linear-gradient(145deg,rgba(60,221,147,.19),rgba(30,116,91,.09));box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 0 24px rgba(55,222,146,.1)}
+.mw-charge-icon svg{width:26px;height:26px;fill:none;stroke:#73f2b0;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 0 8px rgba(92,245,171,.3))}
+.mw-charge-copy{flex:1;min-width:0;display:flex;flex-direction:column;gap:7px}
+.mw-charge-top{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.mw-charge-top strong{font-size:12px;font-weight:900;letter-spacing:.01em;color:#f4fff9}
+.mw-charge-top b{font-size:17px;font-weight:950;letter-spacing:-.045em;color:#83f3b6;font-variant-numeric:tabular-nums}
+.mw-charge-sub{color:#a2b9b1;font-size:8px;font-weight:800;letter-spacing:.13em;text-transform:uppercase}
+.mw-charge-track{width:100%;height:5px;overflow:hidden;border-radius:99px;background:rgba(255,255,255,.12);box-shadow:inset 0 1px 2px rgba(0,0,0,.35)}
+.mw-charge-track span{display:block;width:0;height:100%;border-radius:inherit;background:linear-gradient(90deg,#25c982,#83f3b6,#d4ffe7);box-shadow:0 0 12px rgba(83,240,164,.55);transition:width .7s cubic-bezier(.16,1,.3,1)}
+#mwi.is-charging-alert .di-loader{display:none}
+@media(max-width:380px){
+  #mwi.is-charging-alert{width:calc(100vw - 16px)!important}
+  #mw-charge-view{gap:10px;padding:11px 13px}
+  .mw-charge-icon{width:43px;height:43px}
+}
+
 @media (max-width:700px){.ver{right:-8px;top:-34px}}
 @media (max-width:560px){
   main{padding:0 14px 26px}
@@ -152,6 +180,14 @@ form{width:min(580px,92vw)}
       <div class="di-loader-orbit"></div>
       <div class="di-loader-copy"><strong>Refreshing live status</strong><span>Clock · weather · battery</span></div>
       <div class="di-loader-bar"><span></span></div>
+    </div>
+  </div>
+  <div id="mw-charge-view" aria-hidden="true">
+    <div class="mw-charge-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.2 2.8 5.8 13h5.1l-.7 8.2L18.2 11h-5.1l.1-8.2Z"/></svg></div>
+    <div class="mw-charge-copy">
+      <div class="mw-charge-top"><strong>Charging</strong><b id="mw-charge-percent">--%</b></div>
+      <div class="mw-charge-sub" id="mw-charge-sub">Power connected</div>
+      <div class="mw-charge-track"><span id="mw-charge-fill"></span></div>
     </div>
   </div>
 </div>
@@ -284,6 +320,7 @@ if(ctx){
 /* school-status dynamic island */
 var I=$("mwi"),C=$("mwc"),E=$("mwe"),open=false,pinned=false,hover=false;
 var autoOpenUntil=0,autoCloseTimer=0,lastAutoSlot=-1,loadingTimer=0,islandLoadingShown=/*ISLAND_LOADING_SEEN*/;
+var chargeAlertTimer=0,chargingAlertActive=false;
 var timeEl=$("ct"),expandedTimeEl=$("et");
 var badgeEl=$("schoolBadge"),periodEl=$("periodTitle"),leftEl=$("periodLeft");
 var progressEl=$("periodProgress"),detailEl=$("periodDetail"),nextEl=$("nextPeriod"),noteEl=$("diNote");
@@ -337,7 +374,11 @@ function setOpen(value,userInitiated){
 }
 function fitIsland(){
   requestAnimationFrame(function(){
-    if(open){
+    if(chargingAlertActive){
+      I.style.width=Math.min(350,innerWidth-24)+"px";
+      I.style.height="82px";
+      I.style.borderRadius="27px";
+    }else if(open){
       var width=Math.min(390,Math.max(220,innerWidth-24));
       E.style.width=width+"px";
       var height=Math.ceil(E.getBoundingClientRect().height);
@@ -464,6 +505,32 @@ function renderLiveData(){
   $("eb").innerHTML=b
     ?'<span class="di-metric-icon">'+batterySvg(b,1.45)+'</span><span class="di-metric-text"><b class="di-metric-value">'+Math.round(b.level)+'%</b><small class="di-metric-label">'+(b.charging?'Charging':'On battery')+'</small></span>'
     :'<span class="di-metric-icon">'+batterySvg({level:0,charging:false},1.45)+'</span><span class="di-metric-text"><b class="di-metric-value">--</b><small class="di-metric-label">Battery status unavailable</small></span>';
+  updateChargeView();
+  if(!b||!b.charging)hideChargingAlert();
+  fitIsland();
+}
+function updateChargeView(){
+  var b=S.bat;
+  if(!b)return;
+  var level=Math.max(0,Math.min(100,Math.round(Number(b.level)||0)));
+  $("mw-charge-percent").textContent=level+"%";
+  $("mw-charge-sub").textContent=b.charging?"Power connected · Charging":"Power disconnected";
+  $("mw-charge-fill").style.width=level+"%";
+}
+function showChargingAlert(){
+  if(!S.bat||!S.bat.charging)return;
+  window.clearTimeout(chargeAlertTimer);
+  chargingAlertActive=true;
+  I.classList.add("is-charging-alert");
+  updateChargeView();
+  fitIsland();
+  chargeAlertTimer=window.setTimeout(hideChargingAlert,5200);
+}
+function hideChargingAlert(){
+  window.clearTimeout(chargeAlertTimer);
+  if(!chargingAlertActive)return;
+  chargingAlertActive=false;
+  I.classList.remove("is-charging-alert");
   fitIsland();
 }
 
@@ -522,11 +589,13 @@ window.setTimeout(function(){
 addEventListener("message",function(e){var d=e.data;if(!d)return;
 if(d.type==="mw-state"){
   if(d.vars){for(var k in d.vars)document.documentElement.style.setProperty(k,d.vars[k]);rgb=hex(d.vars["--mw-accent"])}
+  var wasCharging=!!(S.bat&&S.bat.charging);
   S.bat=d.bat||null;S.wx=d.wx||null;islandLoadingShown=islandLoadingShown||!!d.islandLoadingSeen;
   var activeCount=d.activeUsers;
   $("mw-active-users-count").textContent=Number.isFinite(activeCount)?String(Math.max(0,Math.floor(activeCount))):"—";
   $("mw-active-users").classList.toggle("is-ready",Number.isFinite(activeCount));
   chips(d.bm);renderGrid(performance.now());renderLiveData();
+  if(S.bat&&S.bat.charging&&!wasCharging)showChargingAlert();
 }});
 send({type:"mw-ready"});
 })();
