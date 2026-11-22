@@ -220,7 +220,7 @@
 			.mw-boot-wordmark span { color: var(--mw-accent); }
 			.mw-boot-caption { color: rgba(226,224,246,.66); font: 500 11px/1.5 var(--mw-font); letter-spacing: .035em; }
 			.mw-boot-track { position: relative; width: 180px; height: 2px; margin-top: 27px; overflow: hidden; border-radius: 99px; background: rgba(255,255,255,.1); }
-			.mw-boot-track span { position: absolute; inset: 0 auto 0 0; width: 42%; border-radius: inherit; background: linear-gradient(90deg, transparent, var(--mw-accent), #fff, transparent); box-shadow: 0 0 14px var(--mw-accent); animation: mwBootSweep 1.55s cubic-bezier(.55,.05,.35,.95) infinite; transition: width .62s cubic-bezier(.16,1,.3,1); }
+			.mw-boot-track span { position: absolute; inset: 0 auto 0 0; width: 8%; border-radius: inherit; background: linear-gradient(90deg, var(--mw-accent), #fff); box-shadow: 0 0 14px var(--mw-accent); transition: width .72s cubic-bezier(.16,1,.3,1); will-change: width; }
 			.mw-boot-status { display: flex; align-items: center; gap: 8px; margin-top: 17px; color: rgba(200,198,222,.42); font: 700 8px/1 var(--mw-font); letter-spacing: .19em; }
 			.mw-boot-status i { width: 5px; height: 5px; border-radius: 50%; background: var(--mw-accent); box-shadow: 0 0 10px var(--mw-accent); animation: mwBootPulse 1.1s ease-in-out infinite; }
 			#mw-boot-screen.is-finishing .mw-boot-track span { width: 100%; animation: none; background: linear-gradient(90deg, var(--mw-accent), #fff); }
