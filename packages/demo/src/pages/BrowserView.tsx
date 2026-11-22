@@ -129,7 +129,7 @@ let refreshWeatherNow: (() => void) | null = null;
 
 // Create a free Simple Presence app at https://simple-presence.erickr.dev/dashboard
 // and put its public, read-only app key here. This key is safe to expose in browser code.
-const SIMPLE_PRESENCE_APP_KEY = "YOUR_SIMPLE_PRESENCE_APP_KEY";
+const SIMPLE_PRESENCE_APP_KEY = "gETrNnD1k1FdEX3A_YGAcFHyuVxPPBPS";
 let presenceSdkPromise: Promise<any> | null = null;
 let presenceClient: { getCount(): number; destroy(): void } | null = null;
 
@@ -164,7 +164,7 @@ async function startPresence() {
 		const sdk = await loadPresenceSdk();
 		const Client = sdk.SimplePresence;
 		presenceClient = new Client({
-			tag: "minason-web-home",
+			tag: "minason-web",
 			appKey: SIMPLE_PRESENCE_APP_KEY,
 			onCountChange: (count: number) => {
 				if (!Number.isFinite(count)) return;
