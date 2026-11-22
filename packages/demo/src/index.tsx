@@ -32,9 +32,13 @@ export function getTransport(
 
 async function pickWisp(): Promise<string> {
 	const savedPreferred = getActiveWispUrl(demoSettingsStore.wispUrl);
-	// Move users saved on an older built-in relay to the new default. Custom
-	// Wisp selections remain preferred.
-	const preferred = WISP_URLS.slice(1).includes(savedPreferred)
+	// Only migrate the two retired built-in relays. Newly added relays and
+	// user-configured Wisp URLs remain eligible to stay selected.
+	const retiredBuiltIns = new Set([
+		"wss://byod.abstracteducation.loan/stream/534141f4509ce83f5bd805d11df1d7ce5d30a6679fd4c27dbf28fc7c2fb4a710/",
+		"wss://artemata.it/stream/534141f4509ce83f5bd805d11df1d7ce5d30a6679fd4c27dbf28fc7c2fb4a710/",
+	]);
+	const preferred = retiredBuiltIns.has(savedPreferred)
 		? DEFAULT_WISP_URL
 		: savedPreferred;
 	if (preferred !== savedPreferred) {
