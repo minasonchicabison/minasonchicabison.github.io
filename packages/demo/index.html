@@ -331,10 +331,26 @@
 				var status = document.getElementById("mw-boot-status");
 				var retry = document.getElementById("mw-boot-retry");
 				var started = performance.now(), finished = false;
+				var bootMessages = [
+					"Waking up your browser",
+					"Finding the fastest connection",
+					"Preparing your workspace",
+					"Getting your tabs ready",
+					"Polishing the first-load experience"
+				];
+				var bootMessageIndex = 0;
+				var bootMessageTimer = window.setInterval(function () {
+					if (screen.classList.contains("is-finishing") || screen.classList.contains("is-error")) {
+						window.clearInterval(bootMessageTimer);
+						return;
+					}
+					if (caption) caption.textContent = bootMessages[bootMessageIndex++ % bootMessages.length];
+				}, 950);
 				function finish() {
 					if (finished) return;
 					finished = true;
 					window.setTimeout(function () {
+						window.clearInterval(bootMessageTimer);
 						if (caption) caption.textContent = "Your workspace is ready";
 						if (status) status.textContent = "READY TO EXPLORE";
 						screen.classList.add("is-finishing");
@@ -351,6 +367,7 @@
 					finished = true;
 					var reason = event && event.detail ? String(event.detail) : "Minason Web could not finish starting.";
 					if (caption) caption.textContent = reason.slice(0, 120);
+					window.clearInterval(bootMessageTimer);
 					if (status) status.textContent = "STARTUP NEEDS A RETRY";
 					document.body.classList.add("mw-starting");
 					screen.classList.add("is-error");
