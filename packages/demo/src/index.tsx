@@ -1,4 +1,3 @@
-import LoadInterstitial from "./components/LoadInterstitial";
 import App from "./App";
 import LibcurlClient from "@mercuryworkshop/libcurl-transport";
 import EpoxyClient from "@mercuryworkshop/epoxy-transport";
@@ -57,108 +56,69 @@ async function pickWisp(): Promise<string> {
 	return demoSettingsStore.wispUrl;
 }
 
-function isCurrentServiceWorker(
+function isCompatibleServiceWorker(
 	worker: ServiceWorker | null
 ): worker is ServiceWorker {
 	if (!worker) return false;
 	try {
-		return new URL(worker.scriptURL).searchParams.get("v") === __MW_BUILD_ID__;
+		const url = new URL(worker.scriptURL);
+		return url.origin === location.origin && url.pathname === "/sw.js";
 	} catch {
 		return false;
 	}
 }
 
-async function waitForController(timeoutMs = 15000): Promise<ServiceWorker> {
+async function waitForController(timeoutMs = 12000): Promise<ServiceWorker> {
 	const currentController = () => {
 		const worker = navigator.serviceWorker.controller;
-		return isCurrentServiceWorker(worker) ? worker : null;
+		return isCompatibleServiceWorker(worker) ? worker : null;
 	};
 
-	let worker = currentController();
-	if (worker) return worker;
+	// Reuse the active Minason worker even while a newer build installs.
+	// The proxy worker interface stays compatible across Minason app releases.
+	const existing = currentController();
+	if (existing) return existing;
 
-	// "ready" means an active registration exists, not that this page is controlled.
-	await navigator.serviceWorker.ready;
-	worker = currentController();
-	if (worker) return worker;
-
-	await new Promise<void>((resolve, reject) => {
+	return await new Promise<ServiceWorker>((resolve, reject) => {
 		let timer = 0;
+		let settled = false;
 		const cleanup = () => {
 			navigator.serviceWorker.removeEventListener("controllerchange", onChange);
 			window.clearTimeout(timer);
 		};
-		const onChange = () => {
-			if (!currentController()) return;
+		const finish = (worker: ServiceWorker | null) => {
+			if (settled || !worker) return;
+			settled = true;
 			cleanup();
-			resolve();
+			resolve(worker);
 		};
+		const onChange = () => finish(currentController());
 
 		navigator.serviceWorker.addEventListener("controllerchange", onChange);
 		timer = window.setTimeout(() => {
+			if (settled) return;
+			settled = true;
 			cleanup();
-			reject(new Error("The current service worker did not take control of this page."));
+			reject(new Error("The browser worker did not become ready in time."));
 		}, timeoutMs);
+		void navigator.serviceWorker.ready.then(onChange).catch(() => {});
 		onChange();
 	});
-
-	worker = currentController();
-	if (!worker) {
-		throw new Error("No current service worker is controlling this page.");
-	}
-	return worker;
 }
 
 async function init() {
-	const interstitial: any = (
-		<LoadInterstitial status={"Loading"}></LoadInterstitial>
-	);
-	document.body.append(interstitial);
-	interstitial.showModal();
-
 	try {
+		if (!("serviceWorker" in navigator)) {
+			throw new Error("This browser does not support the service needed to run Minason Web.");
+		}
+
 		const serviceWorkerUrl = new URL("/sw.js", location.origin);
 		serviceWorkerUrl.searchParams.set("v", __MW_BUILD_ID__);
-		const registration = await navigator.serviceWorker.register(serviceWorkerUrl.href, {
+		await navigator.serviceWorker.register(serviceWorkerUrl.href, {
 			updateViaCache: "none",
 		});
 
-		// Non-blocking progress updates on state transitions.
-		const updateStatus = (sw: ServiceWorker | null) => {
-			if (!sw) return;
-			const set = (msg: string) => (interstitial.$.state.status = msg);
-			const apply = () => {
-				switch (sw.state) {
-					case "installing":
-						set("Installing service worker...");
-						break;
-					case "installed":
-						set("Service worker installed, waiting to activate...");
-						break;
-					case "activating":
-						set("Activating service worker...");
-						break;
-					case "activated":
-						set("Service worker activated");
-						break;
-					case "redundant":
-						set("Service worker became redundant");
-						break;
-				}
-			};
-			apply();
-			sw.addEventListener("statechange", apply);
-		};
-
-		updateStatus(registration.installing ?? registration.waiting ?? null);
-
-		// Wait until this exact build's worker controls the current page.
-		interstitial.$.state.status =
-			"Waiting for the current service worker to take control...";
 		const readySw = await waitForController();
-		interstitial.$.state.status =
-			"Service worker is controlling this page";
-
 		const wisp = await pickWisp();
 		const savedTransport = localStorage.getItem("mw-transport");
 		const primaryKind: "epoxy" | "libcurl" =
@@ -170,8 +130,6 @@ async function init() {
 
 		const startController = async (kind: "epoxy" | "libcurl") => {
 			const transport = getTransport(wisp, kind);
-			// Initialize the network layer now instead of waiting for the first
-			// navigation to discover that the Wisp transport is not ready.
 			await transport.init();
 			const instance = new Controller({
 				serviceworker: readySw,
@@ -199,14 +157,8 @@ async function init() {
 			localStorage.setItem("mw-transport", fallbackKind);
 		}
 		console.log(controller);
-		interstitial.$.state.status = "Controller initialized";
-		interstitial.close();
 	} catch (e) {
-		console.error("Error during service worker registration:", e);
-		// Always close the modal on error to prevent hanging UI.
-		try {
-			interstitial.close();
-		} catch {}
+		console.error("Error during Minason Web startup:", e);
 		throw e;
 	}
 }
@@ -232,6 +184,9 @@ init()
 	.catch((error) => {
 		app.innerText = "Failed to initialize Minason Web: " +
 			(error instanceof Error ? error.message : String(error));
+		window.dispatchEvent(new CustomEvent("mw-initial-error", {
+			detail: error instanceof Error ? error.message : String(error),
+		}));
 		console.error(error);
 	});
 export { controller, cachePlugin };
