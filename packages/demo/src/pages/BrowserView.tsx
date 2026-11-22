@@ -460,7 +460,9 @@ function onMessage(e: MessageEvent) {
 	const d = e.data;
 	if (d?.type === "mw-ready") {
 		pushTo(t);
-		if (!initialReadySignaled && !t.url) {
+		// The first homepage iframe signals startup completion even when
+		// the app opened directly into a requested URL.
+		if (!initialReadySignaled && t.id === tabs[0]?.id) {
 			initialReadySignaled = true;
 			window.dispatchEvent(new Event("mw-initial-ready"));
 		}
