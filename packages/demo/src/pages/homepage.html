@@ -283,7 +283,7 @@ if(ctx){
 
 /* school-status dynamic island */
 var I=$("mwi"),C=$("mwc"),E=$("mwe"),open=false,pinned=false,hover=false;
-var autoOpenUntil=0,autoCloseTimer=0,lastAutoSlot=-1,loadingTimer=0,islandLoadingShown=false;
+var autoOpenUntil=0,autoCloseTimer=0,lastAutoSlot=-1,loadingTimer=0,islandLoadingShown=/*ISLAND_LOADING_SEEN*/;
 var timeEl=$("ct"),expandedTimeEl=$("et");
 var badgeEl=$("schoolBadge"),periodEl=$("periodTitle"),leftEl=$("periodLeft");
 var progressEl=$("periodProgress"),detailEl=$("periodDetail"),nextEl=$("nextPeriod"),noteEl=$("diNote");
@@ -312,6 +312,7 @@ function remainingString(minutes){
 function startIslandLoading(){
   if(islandLoadingShown)return;
   islandLoadingShown=true;
+  send({type:"mw-island-loading-seen"});
   I.classList.add("is-loading");
   window.clearTimeout(loadingTimer);
   loadingTimer=window.setTimeout(function(){
@@ -521,7 +522,7 @@ window.setTimeout(function(){
 addEventListener("message",function(e){var d=e.data;if(!d)return;
 if(d.type==="mw-state"){
   if(d.vars){for(var k in d.vars)document.documentElement.style.setProperty(k,d.vars[k]);rgb=hex(d.vars["--mw-accent"])}
-  S.bat=d.bat||null;S.wx=d.wx||null;
+  S.bat=d.bat||null;S.wx=d.wx||null;islandLoadingShown=islandLoadingShown||!!d.islandLoadingSeen;
   var activeCount=d.activeUsers;
   $("mw-active-users-count").textContent=Number.isFinite(activeCount)?String(Math.max(0,Math.floor(activeCount))):"—";
   $("mw-active-users").classList.toggle("is-ready",Number.isFinite(activeCount));
