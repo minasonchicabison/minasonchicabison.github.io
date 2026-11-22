@@ -325,6 +325,7 @@ let activeId = 0;
 let nextId = 1;
 let host: HTMLElement | null = null;
 let inited = false;
+let initialReadySignaled = false;
 const activeTab = () => tabs.find((t) => t.id === activeId);
 
 function pushTo(t: Tab) {
@@ -455,8 +456,13 @@ function onMessage(e: MessageEvent) {
 	const t = tabs.find((x) => x.iframe.contentWindow === e.source);
 	if (!t) return;
 	const d = e.data;
-	if (d?.type === "mw-ready") pushTo(t);
-	else if (d?.type === "mw-refresh-live") refreshWeatherNow?.();
+	if (d?.type === "mw-ready") {
+		pushTo(t);
+		if (!initialReadySignaled && !t.url) {
+			initialReadySignaled = true;
+			window.dispatchEvent(new Event("mw-initial-ready"));
+		}
+	} else if (d?.type === "mw-refresh-live") refreshWeatherNow?.();
 	else if (d?.type === "mw-go") {
 		if (t.id !== activeId) select(t.id);
 		go(d.q);
