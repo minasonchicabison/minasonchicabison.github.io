@@ -5,7 +5,7 @@ import EpoxyClient from "@mercuryworkshop/epoxy-transport";
 import { defaultConfigDev } from "@mercuryworkshop/scramjet";
 import { Controller } from "@mercuryworkshop/scramjet-controller";
 import { HttpCachePlugin } from "@mercuryworkshop/scramjet-utils";
-import { demoSettingsStore, WISP_URLS } from "./store";
+import { DEFAULT_WISP_URL, demoSettingsStore, WISP_URLS } from "./store";
 import {
 	connectWisp,
 	getActiveWispUrl,
@@ -32,7 +32,17 @@ export function getTransport(
 }
 
 async function pickWisp(): Promise<string> {
-	const preferred = getActiveWispUrl(demoSettingsStore.wispUrl);
+	const savedPreferred = getActiveWispUrl(demoSettingsStore.wispUrl);
+	// Move users saved on an older built-in relay to the new default. Custom
+	// Wisp selections remain preferred.
+	const preferred = WISP_URLS.slice(1).includes(savedPreferred)
+		? DEFAULT_WISP_URL
+		: savedPreferred;
+	if (preferred !== savedPreferred) {
+		demoSettingsStore.wispUrl = preferred;
+		setActiveWispUrl(preferred);
+	}
+
 	const candidates = [...new Set([preferred, ...WISP_URLS])];
 	for (const url of candidates) {
 		if (await connectWisp(url, 3000)) {
@@ -43,7 +53,7 @@ async function pickWisp(): Promise<string> {
 	}
 
 	// Keep the browser UI available so a working custom Wisp can be added.
-	demoSettingsStore.wispUrl = preferred || WISP_URLS[0];
+	demoSettingsStore.wispUrl = preferred || DEFAULT_WISP_URL;
 	return demoSettingsStore.wispUrl;
 }
 
