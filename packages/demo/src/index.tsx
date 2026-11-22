@@ -106,7 +106,17 @@ async function waitForController(timeoutMs = 12000): Promise<ServiceWorker> {
 	});
 }
 
+function updateBoot(caption: string, status: string, progress: number) {
+	const captionNode = document.getElementById("mw-boot-caption");
+	const statusNode = document.getElementById("mw-boot-status");
+	const fill = document.querySelector<HTMLElement>(".mw-boot-track span");
+	if (captionNode) captionNode.textContent = caption;
+	if (statusNode) statusNode.textContent = status;
+	if (fill) fill.style.width = Math.max(0, Math.min(96, progress)) + "%";
+}
+
 async function init() {
+	updateBoot("Waking up your workspace", "INITIALIZING BROWSER", 8);
 	try {
 		if (!("serviceWorker" in navigator)) {
 			throw new Error("This browser does not support the service needed to run Minason Web.");
@@ -118,8 +128,11 @@ async function init() {
 			updateViaCache: "none",
 		});
 
+		updateBoot("Preparing your browser engine", "SETTING UP YOUR WORKSPACE", 23);
 		const readySw = await waitForController();
+		updateBoot("Finding the fastest available route", "CHECKING NETWORK RELAYS", 39);
 		const wisp = await pickWisp();
+		updateBoot("Connecting your browser", "STARTING NETWORK TRANSPORT", 59);
 		const savedTransport = localStorage.getItem("mw-transport");
 		const primaryKind: "epoxy" | "libcurl" =
 			savedTransport === "epoxy" || savedTransport === "libcurl"
@@ -130,6 +143,7 @@ async function init() {
 
 		const startController = async (kind: "epoxy" | "libcurl") => {
 			const transport = getTransport(wisp, kind);
+			updateBoot("Building your browsing session", "INITIALIZING TRANSPORT", 73);
 			await transport.init();
 			const instance = new Controller({
 				serviceworker: readySw,
@@ -142,6 +156,7 @@ async function init() {
 				scramjetConfig: defaultConfigDev,
 			});
 			await instance.wait();
+			updateBoot("Opening your workspace", "PREPARING YOUR TABS", 88);
 			return instance;
 		};
 
@@ -157,6 +172,7 @@ async function init() {
 			localStorage.setItem("mw-transport", fallbackKind);
 		}
 		console.log(controller);
+		updateBoot("Loading your homepage", "FINALIZING YOUR WORKSPACE", 96);
 	} catch (e) {
 		console.error("Error during Minason Web startup:", e);
 		throw e;
