@@ -328,6 +328,7 @@ let nextId = 1;
 let host: HTMLElement | null = null;
 let inited = false;
 let initialReadySignaled = false;
+let pendingInitialGoto: string | null = null;
 const activeTab = () => tabs.find((t) => t.id === activeId);
 
 function pushTo(t: Tab) {
@@ -416,15 +417,7 @@ function newTab() {
 	t.frame = controller.createFrame(iframe, {
 		plugins: [cachePlugin, urlWatcher, catchEscapedLinks],
 	});
-	iframe.addEventListener("load", () => {
-		pushTo(t);
-		// Fallback in case the homepage's ready message was missed during a
-		// very fast initial navigation or a browser message timing edge case.
-		if (!initialReadySignaled && t.id === tabs[0]?.id) {
-			initialReadySignaled = true;
-			window.dispatchEvent(new Event("mw-initial-ready"));
-		}
-	});
+	iframe.addEventListener("load", () => pushTo(t));
 	iframe.src = buildHomeSrc();
 	tabs.push(t);
 	select(t.id);
@@ -468,11 +461,12 @@ function onMessage(e: MessageEvent) {
 	const d = e.data;
 	if (d?.type === "mw-ready") {
 		pushTo(t);
-		// The first homepage iframe signals startup completion even when
-		// the app opened directly into a requested URL.
 		if (!initialReadySignaled && t.id === tabs[0]?.id) {
 			initialReadySignaled = true;
 			window.dispatchEvent(new Event("mw-initial-ready"));
+			const firstUrl = pendingInitialGoto;
+			pendingInitialGoto = null;
+			if (firstUrl) go(firstUrl);
 		}
 	} else if (d?.type === "mw-island-loading-seen") {
 		svc.islandLoadingSeen = true;
@@ -502,9 +496,17 @@ function initTabs(el: HTMLElement) {
 	newTab();
 	const goto = new URL(location.href).searchParams.get("goto");
 	if (goto) {
-		go(goto);
+		// Let the homepage announce readiness before replacing its iframe
+		// document with the requested destination.
+		pendingInitialGoto = goto;
 		history.replaceState(null, "", location.href.split("?")[0]);
 	}
+	window.setTimeout(() => {
+		if (initialReadySignaled) return;
+		window.dispatchEvent(new CustomEvent("mw-initial-error", {
+			detail: "Your homepage did not finish initializing. Reload to try again.",
+		}));
+	}, 20000);
 }
 
 
