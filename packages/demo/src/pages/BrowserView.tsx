@@ -123,6 +123,7 @@ const svc = {
 	bat: null as null | { level: number; charging: boolean },
 	wx: null as null | { temp: number; code: number; day: boolean; city: string },
 	activeUsers: null as number | null,
+	islandLoadingSeen: (() => { try { return sessionStorage.getItem("mw-island-loading-seen") === "1"; } catch { return false; } })(),
 	started: false,
 };
 let refreshWeatherNow: (() => void) | null = null;
@@ -305,7 +306,8 @@ const buildHomeSrc = () => {
 	const message = WELCOME_MESSAGES[Math.floor(Math.random() * WELCOME_MESSAGES.length)];
 	const html = homepage
 		.replace("/*VARS*/", `:root{${vars}}`)
-		.replace("/*WELCOME_MESSAGE*/", escapeHtml(message));
+		.replace("/*WELCOME_MESSAGE*/", escapeHtml(message))
+		.replace("/*ISLAND_LOADING_SEEN*/", svc.islandLoadingSeen ? "true" : "false");
 	let bin = "";
 	new TextEncoder().encode(html).forEach((c) => (bin += String.fromCharCode(c)));
 	return `data:text/html;charset=utf-8;base64,${btoa(bin)}`;
@@ -330,7 +332,7 @@ const activeTab = () => tabs.find((t) => t.id === activeId);
 
 function pushTo(t: Tab) {
 	t.iframe.contentWindow?.postMessage(
-		{ type: "mw-state", vars: themeVars(), bm: loadBm(), bat: svc.bat, wx: svc.wx, activeUsers: svc.activeUsers },
+		{ type: "mw-state", vars: themeVars(), bm: loadBm(), bat: svc.bat, wx: svc.wx, activeUsers: svc.activeUsers, islandLoadingSeen: svc.islandLoadingSeen },
 		"*"
 	);
 }
@@ -462,6 +464,10 @@ function onMessage(e: MessageEvent) {
 			initialReadySignaled = true;
 			window.dispatchEvent(new Event("mw-initial-ready"));
 		}
+	} else if (d?.type === "mw-island-loading-seen") {
+		svc.islandLoadingSeen = true;
+		try { sessionStorage.setItem("mw-island-loading-seen", "1"); } catch {}
+		pushAll();
 	} else if (d?.type === "mw-refresh-live") refreshWeatherNow?.();
 	else if (d?.type === "mw-go") {
 		if (t.id !== activeId) select(t.id);
