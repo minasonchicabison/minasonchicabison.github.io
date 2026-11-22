@@ -416,7 +416,15 @@ function newTab() {
 	t.frame = controller.createFrame(iframe, {
 		plugins: [cachePlugin, urlWatcher, catchEscapedLinks],
 	});
-	iframe.addEventListener("load", () => pushTo(t));
+	iframe.addEventListener("load", () => {
+		pushTo(t);
+		// Fallback in case the homepage's ready message was missed during a
+		// very fast initial navigation or a browser message timing edge case.
+		if (!initialReadySignaled && t.id === tabs[0]?.id) {
+			initialReadySignaled = true;
+			window.dispatchEvent(new Event("mw-initial-ready"));
+		}
+	});
 	iframe.src = buildHomeSrc();
 	tabs.push(t);
 	select(t.id);
