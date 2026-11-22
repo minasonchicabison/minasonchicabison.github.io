@@ -134,20 +134,29 @@ let presenceSdkPromise: Promise<any> | null = null;
 let presenceClient: { getCount(): number; destroy(): void } | null = null;
 
 function loadPresenceSdk(): Promise<any> {
-	const existing = (window as any).SimplePresence;
+	const existing = (window as any).__mwSimplePresenceSDK;
 	if (existing?.SimplePresence) return Promise.resolve(existing);
 	if (presenceSdkPromise) return presenceSdkPromise;
 
 	presenceSdkPromise = new Promise((resolve, reject) => {
-		const script = document.createElement("script");
-		script.src = "https://unpkg.com/@simple-presence/core@0.3.3";
-		script.async = true;
-		script.onload = () => {
-			const sdk = (window as any).SimplePresence;
+		const eventName = "mw-simple-presence-sdk-ready";
+		const onReady = () => {
+			window.removeEventListener(eventName, onReady);
+			const sdk = (window as any).__mwSimplePresenceSDK;
 			if (sdk?.SimplePresence) resolve(sdk);
-			else reject(new Error("Simple Presence SDK loaded without its browser API"));
+			else reject(new Error("Simple Presence module loaded without its API"));
 		};
-		script.onerror = () => reject(new Error("Simple Presence SDK could not be loaded"));
+		const script = document.createElement("script");
+		script.type = "module";
+		script.textContent =
+			'import { SimplePresence } from "https://esm.sh/@simple-presence/core@0.3.3?bundle";\n' +
+			'(window).__mwSimplePresenceSDK = { SimplePresence };\n' +
+			'window.dispatchEvent(new Event("' + eventName + '"));';
+		window.addEventListener(eventName, onReady, { once: true });
+		script.onerror = () => {
+			window.removeEventListener(eventName, onReady);
+			reject(new Error("Simple Presence ES module could not be loaded"));
+		};
 		document.head.appendChild(script);
 	});
 	return presenceSdkPromise;
