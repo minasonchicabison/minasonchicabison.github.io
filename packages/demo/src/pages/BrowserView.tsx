@@ -404,7 +404,7 @@ function newTab() {
 	const iframe = document.createElement("iframe");
 	// GeForce NOW queue ads use autoplay video. Delegate media permissions to
 	// proxied pages so the browser shell does not suppress ad playback.
-	iframe.allow = "autoplay; encrypted-media; fullscreen; picture-in-picture";
+	iframe.allow = "autoplay *; encrypted-media *; fullscreen *; picture-in-picture *";
 	iframe.allowFullscreen = true;
 	iframe.className = "mw-frame";
 	host.appendChild(iframe);
