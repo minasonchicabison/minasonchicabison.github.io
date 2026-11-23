@@ -1,7 +1,7 @@
 import App from "./App";
 import LibcurlClient from "@mercuryworkshop/libcurl-transport";
 import EpoxyClient from "@mercuryworkshop/epoxy-transport";
-import { defaultConfigDev } from "@mercuryworkshop/scramjet";
+import { defaultConfig } from "@mercuryworkshop/scramjet";
 import { Controller } from "@mercuryworkshop/scramjet-controller";
 import { HttpCachePlugin } from "@mercuryworkshop/scramjet-utils";
 import { DEFAULT_WISP_URL, demoSettingsStore, WISP_URLS } from "./store";
@@ -157,7 +157,7 @@ async function init() {
 					injectPath: buildAsset("/controller/controller.inject.js"),
 					wasmPath: buildAsset("/scramjet/scramjet.wasm"),
 				},
-				scramjetConfig: defaultConfigDev,
+				scramjetConfig: defaultConfig,
 			});
 			await instance.wait();
 			updateBoot("Opening your workspace", "PREPARING YOUR TABS", 88);
