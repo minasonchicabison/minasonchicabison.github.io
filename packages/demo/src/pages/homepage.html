@@ -217,8 +217,8 @@ function send(m){parent.postMessage(m,"*")}
 
 function openGeForceNowDirect(value){
   var raw=String(value||"").trim();
-  if(!raw||/\\s/.test(raw))return false;
-  if(!/^[a-z][a-z0-9+.-]*:\/\//i.test(raw)&&/^[^\\s/]+\\.[a-z]{2,}/i.test(raw))raw="https://"+raw;
+  if(!raw||/\s/.test(raw))return false;
+  if(!/^[a-z][a-z0-9+.-]*:\/\//i.test(raw)&&/^[^\s/]+\.[a-z]{2,}/i.test(raw))raw="https://"+raw;
   try{
     var url=new URL(raw),host=url.hostname.toLowerCase();
     if(host!=="geforcenow.com"&&!host.endsWith(".geforcenow.com"))return false;
