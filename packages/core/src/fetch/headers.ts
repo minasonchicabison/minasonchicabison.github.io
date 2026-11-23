@@ -141,7 +141,21 @@ export function rewriteRequestHeaders(
 		rawOriginUrl &&
 		rawOriginUrl.pathname.startsWith(handler.context.prefix.pathname)
 	) {
-		headers.set("Origin", originUrl.origin);
+		// Match the browser's Origin-header behavior. Cross-origin no-cors
+		// resource loads such as ordinary <img> and classic <script> requests
+		// do not carry an Origin header. Sending one here can cause CDNs to
+		// reject otherwise-public assets. CORS requests and non-GET/HEAD
+		// requests still need the logical page origin.
+		const method = request.method.toUpperCase();
+		const fetchMode = parsed.fetchMode ?? request.mode;
+		if (
+			fetchMode === "cors" ||
+			(method !== "GET" && method !== "HEAD")
+		) {
+			headers.set("Origin", originUrl.origin);
+		} else {
+			headers.delete("Origin");
+		}
 
 		const referer = createReferrerString(
 			originUrl,
