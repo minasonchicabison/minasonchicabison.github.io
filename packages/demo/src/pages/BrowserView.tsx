@@ -437,10 +437,31 @@ function closeTab(id: number) {
 	else renderStrip();
 }
 
+function isGeForceNowUrl(value: string): boolean {
+	try {
+		const hostname = new URL(value).hostname.toLowerCase();
+		return hostname === "geforcenow.com" || hostname.endsWith(".geforcenow.com");
+	} catch {
+		return false;
+	}
+}
+
+function openGeForceNowDirect(value: string): boolean {
+	if (!isGeForceNowUrl(value)) return false;
+	const opened = window.open(value, "_blank");
+	if (opened) {
+		try { opened.opener = null; } catch {}
+	} else {
+		window.alert("Allow popups for Minason Web to open GeForce NOW in a normal browser tab.");
+	}
+	return true;
+}
+
 export function go(input: string) {
 	const t = activeTab();
 	const u = toUrl(input);
 	if (!t || !u) return;
+	if (openGeForceNowDirect(u)) return;
 	t.url = u;
 	t.title = tabTitleFor(u);
 	t.frame.go(u);
@@ -480,6 +501,8 @@ function onMessage(e: MessageEvent) {
 	else if (d?.type === "mw-go") {
 		if (t.id !== activeId) select(t.id);
 		go(d.q);
+	} else if (d?.type === "mw-gfn-popup-blocked") {
+		window.alert("Popup blocked. Allow popups for Minason Web, then open GeForce NOW again.");
 	} else if (d?.type === "mw-add-bm") {
 		const u = prompt("Add a bookmark - enter an address:");
 		if (u) addBookmark(u);
