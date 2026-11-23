@@ -170,6 +170,16 @@ export function rewriteUrl(
 			return url;
 		}
 
+		// Google serves the OM SDK as a public cross-origin JavaScript asset.
+		// Load this exact file directly because routing it through the proxy
+		// transport is producing a 404 in GeForce NOW's ad initialization.
+		if (
+			realUrl.hostname === "pagead2.googlesyndication.com" &&
+			realUrl.pathname === "/omsdk/releases/live/omweb-v1.js"
+		) {
+			return realUrl.href;
+		}
+
 		const encodedHash = context.interface.codecEncode(realUrl.hash.slice(1));
 		const realHash = encodedHash ? "#" + encodedHash : "";
 		realUrl.hash = "";
