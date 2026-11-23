@@ -215,28 +215,14 @@ function hex(h){h=(h||"").trim().replace("#","");if(h.length!==6)return[143,124,
 var S={bat:null,wx:null},rgb=hex(getComputedStyle(document.documentElement).getPropertyValue("--mw-accent"));
 function send(m){parent.postMessage(m,"*")}
 
-function openGeForceNowDirect(value){
-  var raw=String(value||"").trim();
-  if(!raw||/\s/.test(raw))return false;
-  if(!/^[a-z][a-z0-9+.-]*:\/\//i.test(raw)&&/^[^\s/]+\.[a-z]{2,}/i.test(raw))raw="https://"+raw;
-  try{
-    var url=new URL(raw),host=url.hostname.toLowerCase();
-    if(host!=="geforcenow.com"&&!host.endsWith(".geforcenow.com"))return false;
-    var opened=window.open(url.href,"_blank");
-    if(opened){try{opened.opener=null}catch(e){}}
-    else send({type:"mw-gfn-popup-blocked"});
-    return true;
-  }catch(e){return false}
-}
-
 /* search + bookmarks */
-$("f").addEventListener("submit",function(e){e.preventDefault();var v=$("q").value.trim();if(v&&!openGeForceNowDirect(v))send({type:"mw-go",q:v})});
+$("f").addEventListener("submit",function(e){e.preventDefault();var v=$("q").value.trim();if(v)send({type:"mw-go",q:v})});
 function chips(list){var box=$("chips");box.innerHTML="";
 (list||[]).forEach(function(b,i){var c=document.createElement("button");c.className="chip";c.type="button";
 var im=document.createElement("img");try{im.src="https://icons.duckduckgo.com/ip3/"+new URL(b.u).hostname+".ico"}catch(e){}im.alt="";im.onerror=function(){im.remove()};c.appendChild(im);
 c.appendChild(document.createTextNode(b.t));
 var x=document.createElement("span");x.className="x";x.textContent="\u00d7";x.title="Remove";x.onclick=function(ev){ev.stopPropagation();send({type:"mw-rm-bm",i:i})};c.appendChild(x);
-c.onclick=function(){if(!openGeForceNowDirect(b.u))send({type:"mw-go",q:b.u})};box.appendChild(c)});
+c.onclick=function(){send({type:"mw-go",q:b.u})};box.appendChild(c)});
 var a=document.createElement("button");a.className="chip add";a.type="button";a.textContent="+  Add";a.onclick=function(){send({type:"mw-add-bm"})};box.appendChild(a)}
 chips([]);
 
