@@ -441,7 +441,6 @@ export function go(input: string) {
 	const t = activeTab();
 	const u = toUrl(input);
 	if (!t || !u) return;
-	if (openGeForceNowDirect(u)) return;
 	t.url = u;
 	t.title = tabTitleFor(u);
 	t.frame.go(u);
