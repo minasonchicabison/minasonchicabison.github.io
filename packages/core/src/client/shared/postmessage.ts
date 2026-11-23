@@ -40,6 +40,14 @@ export default function (client: ScramjetClient, self: Self) {
 				const callerGlobalThisProxied: Self = Function("return globalThis")();
 				const callerClient = callerGlobalThisProxied[SCRAMJETCLIENT];
 
+				// Third-party frames may call postMessage without having a Scramjet
+				// client installed. In that case, preserve the native message instead
+				// of trying to read origin metadata from a missing client.
+				if (!callerClient?.url) {
+					ctx.return(ctx.call());
+					return;
+				}
+
 				// this WOULD be enough but the source argument of MessageEvent has to return the caller's window
 				// and if we just call it normally it would be coming from here, which WILL NOT BE THE CALLER'S because the accessor is from the parent
 				// so with the stolen function we wrap postmessage so the source will truly be the caller's window (remember that function is scramjet's!!!)
