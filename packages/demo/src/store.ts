@@ -10,6 +10,7 @@ export const WISP_URLS = [
 	"wss://wisp-worker.googleclassroom.workers.dev/",
 	"wss://byod.abstracteducation.loan/stream/534141f4509ce83f5bd805d11df1d7ce5d30a6679fd4c27dbf28fc7c2fb4a710/",
 	"wss://artemata.it/stream/534141f4509ce83f5bd805d11df1d7ce5d30a6679fd4c27dbf28fc7c2fb4a710/",
+	"wss://wisp-d6s9.onrender.com/wisp/"
 ];
 
 // Libcurl is the default engine; Epoxy remains available as an alternate.
