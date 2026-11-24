@@ -2,7 +2,7 @@ import { createStore } from "dreamland/core";
 
 export type AvailableTransports = "libcurl" | "epoxy";
 
-export const DEFAULT_WISP_URL = "wss://wisp-d6s9.onrender.com/wisp/";
+export const DEFAULT_WISP_URL = "wss://wisp-worker.googleclassroom.workers.dev/";
 
 // Tried in order; the first one that answers is used. Add your own servers here.
 export const WISP_URLS = [
