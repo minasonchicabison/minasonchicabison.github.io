@@ -174,7 +174,15 @@ function findTab(pathname: string): ControllerReference | undefined {
  */
 export function shouldRoute(event: FetchEvent): boolean {
 	const url = new URL(event.request.url);
-	return url.pathname.startsWith(SCRAMJET_PREFIX);
+	const matches = url.pathname.startsWith(SCRAMJET_PREFIX);
+	if (matches) {
+		console.info(
+			"[Minason SW] shouldRoute matched",
+			event.request.method,
+			url.pathname
+		);
+	}
+	return matches;
 }
 
 async function waitForTab(
@@ -194,7 +202,17 @@ async function waitForTab(
 export async function route(event: FetchEvent): Promise<Response> {
 	try {
 		const url = new URL(event.request.url);
+		console.info(
+			"[Minason SW] route entered",
+			event.request.method,
+			url.pathname
+		);
 		const tab = await waitForTab(url.pathname);
+		console.info(
+			"[Minason SW] controller lookup",
+			url.pathname,
+			tab ? "matched " + tab.prefix : "no matching controller"
+		);
 		if (!tab) {
 			return new Response(
 				"Minason proxy is restoring its service-worker connection. Retry the request.",
