@@ -985,6 +985,17 @@ document.addEventListener("visibilitychange", () => {
 });
 
 
+function openGeForceNowDirect() {
+	let target = "https://play.geforcenow.com/";
+	try {
+		const candidate = new URL(toUrl(browserState.url));
+		if (candidate.protocol === "https:" && candidate.hostname === "play.geforcenow.com") {
+			target = candidate.href;
+		}
+	} catch {}
+	window.open(target, "_blank", "noopener,noreferrer");
+}
+
 /* ---------- omnibox ---------- */
 export const Omnibox: Component = function (cx) {
 	return (
@@ -1030,6 +1041,15 @@ export const Omnibox: Component = function (cx) {
 					/>
 				</div>
 				<div class="omnibox-nav">
+					<button
+						type="button"
+						class="nav-btn"
+						aria-label="Open GeForce NOW directly"
+						title="Open GeForce NOW in a normal browser tab"
+						on:click={() => openGeForceNowDirect()}
+					>
+						<span class="material-symbols-outlined">open_in_new</span>
+					</button>
 					<button type="button" class="nav-btn" aria-label="Bookmark this page" on:click={() => addBookmark(browserState.url)}>
 						<span class="material-symbols-outlined">bookmark</span>
 					</button>
