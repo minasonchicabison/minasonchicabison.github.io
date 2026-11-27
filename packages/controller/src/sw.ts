@@ -157,16 +157,56 @@ addEventListener("message", (e) => {
 	tabs.push(new ControllerReference(init.prefix, init.id, e.ports[0]));
 });
 
+const SCRAMJET_PREFIX = "/~/sj/";
+
+function findTab(pathname: string): ControllerReference | undefined {
+	return tabs.find((tab) => pathname.startsWith(tab.prefix));
+}
+
+/**
+ * Service workers can be terminated between fetches, which clears this
+ * module's in-memory controller list. The controller page re-registers its
+ * MessagePort when it receives the startup/revive notification below.
+ *
+ * Route every Scramjet URL through the worker even while that registration
+ * is being restored. Otherwise the request falls through to GitHub Pages,
+ * which responds with its own HTML 404 instead of reaching the proxy.
+ */
 export function shouldRoute(event: FetchEvent): boolean {
 	const url = new URL(event.request.url);
-	const tab = tabs.find((tab) => url.pathname.startsWith(tab.prefix));
-	return tab !== undefined;
+	return url.pathname.startsWith(SCRAMJET_PREFIX);
+}
+
+async function waitForTab(
+	pathname: string,
+	timeoutMs = 5000
+): Promise<ControllerReference | undefined> {
+	const deadline = Date.now() + timeoutMs;
+	do {
+		const tab = findTab(pathname);
+		if (tab) return tab;
+		await new Promise<void>((resolve) => setTimeout(resolve, 50));
+	} while (Date.now() < deadline);
+
+	return findTab(pathname);
 }
 
 export async function route(event: FetchEvent): Promise<Response> {
 	try {
 		const url = new URL(event.request.url);
-		const tab = tabs.find((tab) => url.pathname.startsWith(tab.prefix))!;
+		const tab = await waitForTab(url.pathname);
+		if (!tab) {
+			return new Response(
+				"Minason proxy is restoring its service-worker connection. Retry the request.",
+				{
+					status: 503,
+					headers: {
+						"Content-Type": "text/plain; charset=utf-8",
+						"Retry-After": "1",
+					},
+				}
+			);
+		}
 		const client = await clients.get(event.clientId);
 
 		const rawheaders: RawHeaders = [...event.request.headers];
