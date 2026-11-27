@@ -206,13 +206,18 @@ async function fetchWithRetry(
 	for (let attempt = 1; attempt <= maxAttempts; attempt++) {
 		try {
 			const resp = await handler.client.fetch(url, init);
-			if (isAd && resp.status >= 400) {
-				console.warn(
+			if (isAd) {
+				// log every ad-host response (not just failures) so a stalled ad
+				// chain can be traced to the exact request that went wrong
+				const log = resp.status >= 400 ? console.warn : console.info;
+				log(
 					"[Minason ads]",
 					resp.status,
 					method,
 					url.hostname + url.pathname,
-					"attempt " + attempt
+					"attempt " + attempt,
+					resp.rawHeaders
+						?.find?.(([k]: [string, string]) => k.toLowerCase() === "content-type")?.[1] ?? ""
 				);
 			}
 			if (

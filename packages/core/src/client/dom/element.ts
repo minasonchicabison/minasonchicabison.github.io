@@ -183,6 +183,90 @@ export default function (client: ScramjetClient, self: typeof window) {
 		}
 	}
 
+	/* eslint-disable scramjet-core/no-globals */
+	// Sandboxed iframes without allow-same-origin get an opaque origin, which a
+	// service worker can never control: every request made inside them skips the
+	// proxy and 404s on the host (this is what broke GeForce NOW's ad
+	// verification iframes). Scramjet already strips the `sandbox` attribute for
+	// HTML parsing and setAttribute(), but ad SDKs also set it through the
+	// `iframe.sandbox` property / DOMTokenList, which bypassed that. Give scripts
+	// a harmless detached token list so mutations never reach the real element.
+	const sandboxDescriptor = client.natives.call(
+		"Object.getOwnPropertyDescriptor",
+		null,
+		self.HTMLIFrameElement.prototype,
+		"sandbox"
+	);
+	if (sandboxDescriptor && sandboxDescriptor.get) {
+		const inertSandboxLists = new WeakMap<object, any>();
+		const makeInertTokenList = () => {
+			const tokens: string[] = [];
+			const list: any = {
+				add: (...t: string[]) => {
+					for (const x of t) if (!tokens.includes(x)) tokens.push(x);
+				},
+				remove: (...t: string[]) => {
+					for (const x of t) {
+						const i = tokens.indexOf(x);
+						if (i >= 0) tokens.splice(i, 1);
+					}
+				},
+				toggle: (x: string, force?: boolean) => {
+					const has = tokens.includes(x);
+					if (force === true || (force === undefined && !has)) {
+						if (!has) tokens.push(x);
+						return true;
+					}
+					const i = tokens.indexOf(x);
+					if (i >= 0) tokens.splice(i, 1);
+					return false;
+				},
+				replace: (a: string, b: string) => {
+					const i = tokens.indexOf(a);
+					if (i < 0) return false;
+					tokens[i] = b;
+					return true;
+				},
+				contains: (x: string) => tokens.includes(x),
+				// every sandbox keyword is "supported"; none are ever enforced
+				supports: () => true,
+				item: (i: number) => tokens[i] ?? null,
+				forEach: (cb: any, thisArg?: any) =>
+					tokens.forEach((t, i) => cb.call(thisArg, t, i, list)),
+				toString: () => tokens.join(" "),
+				get length() {
+					return tokens.length;
+				},
+				get value() {
+					return tokens.join(" ");
+				},
+				set value(v: string) {
+					tokens.length = 0;
+					for (const x of String(v).split(/\s+/)) if (x) tokens.push(x);
+				},
+			};
+			return list;
+		};
+
+		Object_defineProperty(self.HTMLIFrameElement.prototype, "sandbox", {
+			configurable: true,
+			enumerable: true,
+			get() {
+				let list = inertSandboxLists.get(this);
+				if (!list) {
+					list = makeInertTokenList();
+					inertSandboxLists.set(this, list);
+				}
+				return list;
+			},
+			set(value) {
+				const list = this.sandbox;
+				list.value = String(value);
+			},
+		});
+	}
+	/* eslint-enable scramjet-core/no-globals */
+
 	client.Trap("HTMLImageElement.prototype.currentSrc", {
 		get(ctx) {
 			const currentSrc = ctx.get() as string;
