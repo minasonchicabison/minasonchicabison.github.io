@@ -202,6 +202,19 @@ async function waitForServiceWorkerController(
 
 const serviceWorkers = navigator.serviceWorker;
 
+function getServiceWorkerContainer(global: typeof globalThis): ServiceWorkerContainer {
+	try {
+		// Same-origin child frames have their own service-worker client. Use
+		// that container so clients.claim() can control the frame that performs
+		// native resource loads. Opaque frames cannot be controlled, so retain
+		// the parent container as the transport fallback.
+		if (global.location?.origin !== "null") {
+			return global.navigator.serviceWorker ?? serviceWorkers;
+		}
+	} catch {}
+	return serviceWorkers;
+}
+
 type Init = {
 	config: Config;
 	sjconfig: ScramjetConfig;
@@ -251,43 +264,55 @@ class ExecutionContextWrapper {
 	client!: ScramjetClient;
 	cookieJar: CookieJar;
 	transport: RemoteTransport;
+	private serviceWorkers: ServiceWorkerContainer;
 	private handleServiceWorkerCookieMessage: (event: MessageEvent) => void;
 
 	constructor(
 		public global: typeof globalThis,
 		public init: Init
 	) {
+		this.serviceWorkers = getServiceWorkerContainer(this.global);
+		if (this.serviceWorkers !== serviceWorkers) {
+			console.info("[Minason SW] using frame-local service worker container", {
+				origin: this.global.location?.origin,
+				controller: this.serviceWorkers.controller?.scriptURL ?? null,
+			});
+		}
+
 		const channel = new MessageChannel();
 		this.transport = new RemoteTransport(channel.port1);
-		void waitForServiceWorkerController(serviceWorkers).then(
-			(sw) => {
-				if (!sw) {
-					channel.port2.close();
-					console.warn(
-						"[Minason SW] no controller for proxy frame",
-						this.global.location?.href
-					);
-					return;
-				}
-				console.info(
-					"[Minason SW] transport connected for proxy frame",
+		void (async () => {
+			let sw = await waitForServiceWorkerController(this.serviceWorkers);
+			// An opaque or otherwise uncontrollable subframe still uses the
+			// already-controlled parent frame to establish Scramjet transport.
+			if (!sw && this.serviceWorkers !== serviceWorkers) {
+				sw = await waitForServiceWorkerController(serviceWorkers);
+			}
+			if (!sw) {
+				channel.port2.close();
+				console.warn(
+					"[Minason SW] no controller for proxy frame",
 					this.global.location?.href
 				);
-				sw.postMessage(
-					{
-						$sw$initRemoteTransport: {
-							port: channel.port2,
-							prefix: this.init.prefix.href,
-						},
-					},
-					[channel.port2]
-				);
-			},
-			(error) => {
-				channel.port2.close();
-				console.warn("[Minason SW] controller wait failed", error);
+				return;
 			}
-		);
+			console.info(
+				"[Minason SW] transport connected for proxy frame",
+				this.global.location?.href
+			);
+			sw.postMessage(
+				{
+					$sw$initRemoteTransport: {
+						port: channel.port2,
+						prefix: this.init.prefix.href,
+					},
+				},
+				[channel.port2]
+			);
+		})().catch((error) => {
+			channel.port2.close();
+			console.warn("[Minason SW] controller wait failed", error);
+		});
 
 		this.cookieJar = new CookieJar();
 		this.cookieJar.load(this.init.cookies);
@@ -328,7 +353,7 @@ class ExecutionContextWrapper {
 			}
 
 			if (typeof payload.id === "string") {
-				const targetSw = serviceWorkers.controller;
+				const targetSw = this.serviceWorkers.controller ?? serviceWorkers.controller;
 				targetSw?.postMessage({
 					$sw$setCookieDone: {
 						id: payload.id,
@@ -337,10 +362,16 @@ class ExecutionContextWrapper {
 			}
 		};
 
-		serviceWorkers.addEventListener(
+		this.serviceWorkers.addEventListener(
 			"message",
 			this.handleServiceWorkerCookieMessage
 		);
+		if (this.serviceWorkers !== serviceWorkers) {
+			serviceWorkers.addEventListener(
+				"message",
+				this.handleServiceWorkerCookieMessage
+			);
+		}
 
 		this.injectScramjet();
 	}
