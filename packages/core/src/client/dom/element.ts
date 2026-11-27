@@ -440,17 +440,52 @@ export default function (client: ScramjetClient, self: typeof window) {
 
 	// i actually need to do something with this
 	client.Proxy("Element.prototype.setAttributeNode", {
-		apply(_ctx) {},
+		apply(ctx) {
+			const attr = ctx.args[0] as Attr | null;
+			if (attr && isVirtualIframeSandboxAttribute(ctx.this, attr.name)) {
+				const previous = client.natives.call(
+					"Element.prototype.getAttributeNode",
+					ctx.this,
+					"sandbox"
+				);
+				ctx.this.setAttribute("sandbox", attr.value);
+				ctx.return(previous);
+			}
+		},
 	});
+	client.Proxy("Element.prototype.setAttributeNodeNS", {
+		apply(ctx) {
+			const attr = ctx.args[0] as Attr | null;
+			if (
+				attr &&
+				attr.namespaceURI == null &&
+				isVirtualIframeSandboxAttribute(ctx.this, attr.localName)
+			) {
+				const previous = client.natives.call(
+					"Element.prototype.getAttributeNodeNS",
+					ctx.this,
+					null,
+					"sandbox"
+				);
+				ctx.this.setAttribute("sandbox", attr.value);
+				ctx.return(previous);
+			}
+		},
+	});
+
+	const isVirtualIframeSandboxAttribute = (element: Element, name: unknown) =>
+		element.tagName?.toLowerCase() === "iframe" &&
+		String(name).toLowerCase() === "sandbox";
 
 	client.Proxy("Element.prototype.setAttributeNS", {
 		apply(ctx) {
 			// TODO: this could leak by like calling stringify twice or some dumb shit lol
+			const namespace = ctx.args[0] as string | null;
 			const name = String(ctx.args[1]);
 			const value = String(ctx.args[2]);
 
 			const ruleList = htmlRules.find((rule) => {
-				const r = rule[String(name).toLowerCase()];
+				const r = rule[name.toLowerCase()];
 				if (!r) return false;
 				if (r === "*") return true;
 				if (typeof r === "function") return false; // this can't happen but ts
@@ -459,16 +494,33 @@ export default function (client: ScramjetClient, self: typeof window) {
 			});
 
 			if (ruleList) {
-				ctx.args[2] = ruleList.fn(
+				const rewritten = ruleList.fn(
 					value,
 					client.context,
 					client.meta,
 					collectAttributeMap(client, ctx.this, name, value)
 				);
+				if (rewritten == null) {
+					client.natives.call(
+						"Element.prototype.removeAttributeNS",
+						ctx.this,
+						namespace,
+						name
+					);
+					client.natives.call(
+						"Element.prototype.setAttribute",
+						ctx.this,
+						`scramjet-attr-${name}`,
+						value
+					);
+					ctx.return(undefined);
+					return;
+				}
+				ctx.args[2] = rewritten;
 				client.natives.call(
 					"Element.prototype.setAttribute",
 					ctx.this,
-					`scramjet-attr-${ctx.args[1]}`,
+					`scramjet-attr-${name}`,
 					value
 				);
 			}
@@ -513,6 +565,16 @@ export default function (client: ScramjetClient, self: typeof window) {
 		apply(ctx) {
 			const name = String(ctx.args[0]);
 			if (name.startsWith("scramjet-attr")) return ctx.return(false);
+
+			if (isVirtualIframeSandboxAttribute(ctx.this, name)) {
+				const hasSandbox = ctx.this.getAttribute("sandbox") !== null;
+				const force = ctx.args[1];
+				const present = force === undefined ? !hasSandbox : Boolean(force);
+				if (present) ctx.this.setAttribute("sandbox", "");
+				else ctx.this.removeAttribute("sandbox");
+				return ctx.return(present);
+			}
+
 			if (
 				client.natives.call("Element.prototype.hasAttribute", ctx.this, name)
 			) {
