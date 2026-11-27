@@ -155,6 +155,67 @@ export default function (client: ScramjetClient, self: typeof window) {
 	const attrs = Object_keys(attrObject);
 	const deferredScriptSources = new WeakMap<HTMLScriptElement, string>();
 
+	// Resolve the logical top-level page through Scramjet-controlled ancestors.
+	// Ad SDKs can create additional cross-origin frames inside about:blank or
+	// third-party creative frames, so checking only client.url misses those
+	// descendants and drops the autoplay delegation chain.
+	const isWithinGeForceNowFrameTree = () => {
+		let currentWindow: any = self;
+		for (let depth = 0; depth < 16; depth++) {
+			try {
+				const frameClient = currentWindow[SCRAMJETCLIENT] as
+					| ScramjetClient
+					| undefined;
+				const hostname = frameClient?.url?.hostname?.toLowerCase() ?? "";
+				if (
+					hostname === "geforcenow.com" ||
+					hostname.endsWith(".geforcenow.com")
+				) {
+					return true;
+				}
+
+				const parentWindow = currentWindow.parent;
+				if (!parentWindow || parentWindow === currentWindow) break;
+				currentWindow = parentWindow;
+			} catch {
+				break;
+			}
+		}
+
+		const hostname = client.url.hostname.toLowerCase();
+		return (
+			hostname === "geforcenow.com" ||
+			hostname.endsWith(".geforcenow.com")
+		);
+	};
+
+	const withAutoplayPermission = (value: unknown) => {
+		const directives = String(value ?? "")
+			.split(";")
+			.map((directive) => directive.trim())
+			.filter(Boolean);
+		const autoplayIndex = directives.findIndex((directive) =>
+			/^autoplay(?:\s|$)/i.test(directive)
+		);
+		if (autoplayIndex >= 0) directives[autoplayIndex] = "autoplay *";
+		else directives.push("autoplay *");
+		return directives.join("; ");
+	};
+
+	client.Trap("HTMLIFrameElement.prototype.allow", {
+		get(ctx) {
+			return ctx.get();
+		},
+		set(ctx, value) {
+			ctx.set(
+				isWithinGeForceNowFrameTree()
+					? withAutoplayPermission(value)
+					: value
+			);
+		},
+	});
+
+
 	for (const attr of attrs) {
 		for (const element of attrObject[attr]) {
 			const descriptor = client.natives.call(
@@ -444,6 +505,13 @@ export default function (client: ScramjetClient, self: typeof window) {
 			let [name, value] = ctx.args;
 			const tagName = ctx.this.tagName.toLowerCase();
 
+			if (
+				tagName === "iframe" &&
+				String(name).toLowerCase() === "allow" &&
+				isWithinGeForceNowFrameTree()
+			) {
+				value = withAutoplayPermission(value);
+			}
 			if (value != null) value = String(value);
 			ctx.args[1] = value;
 
@@ -688,38 +756,19 @@ export default function (client: ScramjetClient, self: typeof window) {
 					const iframe = element as HTMLIFrameElement;
 					iframes.add(iframe);
 
-					// GeForce NOW's free-tier preroll is rendered by IMA inside
-					// nested cross-origin frames. The outer Minason frame already
-					// delegates autoplay, but each ad frame must carry that
-					// permission forward or Chrome can leave the video surface blank.
-					const hostname = client.url.hostname.toLowerCase();
-					if (
-						hostname === "imasdk.googleapis.com" ||
-						hostname === "geforcenow.com" ||
-						hostname.endsWith(".geforcenow.com")
-					) {
+					// Every nested frame in the GeForce NOW tree must delegate
+					// autoplay, including ad-tech and about:blank descendants.
+					if (isWithinGeForceNowFrameTree()) {
 						const existingAllow = client.natives.call(
 							"Element.prototype.getAttribute",
 							iframe,
 							"allow"
 						) as string | null;
-						const directives = (existingAllow || "")
-							.split(";")
-							.map((directive) => directive.trim())
-							.filter(Boolean);
-						const autoplayIndex = directives.findIndex((directive) =>
-							/^autoplay(?:\s|$)/i.test(directive)
-						);
-						if (autoplayIndex >= 0) {
-							directives[autoplayIndex] = "autoplay *";
-						} else {
-							directives.push("autoplay *");
-						}
 						client.natives.call(
 							"Element.prototype.setAttribute",
 							iframe,
 							"allow",
-							directives.join("; ")
+							withAutoplayPermission(existingAllow)
 						);
 					}
 
