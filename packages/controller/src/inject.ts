@@ -168,7 +168,10 @@ async function waitForServiceWorkerController(
 	timeoutMs = 5000
 ): Promise<ServiceWorker | null> {
 	if (!serviceWorkers) return null;
-	if (serviceWorkers.controller) return serviceWorkers.controller;
+	if (serviceWorkers.controller) {
+		serviceWorkers.controller.postMessage({ $sw$claimClients: true });
+		return serviceWorkers.controller;
+	}
 
 	let registration: ServiceWorkerRegistration | null = null;
 	try {
@@ -196,6 +199,8 @@ async function waitForServiceWorkerController(
 		if (serviceWorkers.controller) finish();
 	});
 }
+
+const serviceWorkers = navigator.serviceWorker;
 
 type Init = {
 	config: Config;
@@ -254,11 +259,6 @@ class ExecutionContextWrapper {
 	) {
 		const channel = new MessageChannel();
 		this.transport = new RemoteTransport(channel.port1);
-		let serviceWorkers: ServiceWorkerContainer | undefined;
-		try {
-			serviceWorkers = this.global.navigator.serviceWorker;
-		} catch {}
-
 		void waitForServiceWorkerController(serviceWorkers).then(
 			(sw) => {
 				if (!sw) {
@@ -270,7 +270,7 @@ class ExecutionContextWrapper {
 					return;
 				}
 				console.info(
-					"[Minason SW] proxy frame controlled",
+					"[Minason SW] transport connected for proxy frame",
 					this.global.location?.href
 				);
 				sw.postMessage(
