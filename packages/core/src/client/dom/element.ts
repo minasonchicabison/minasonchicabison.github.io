@@ -5,6 +5,8 @@ import {
 	Object_keys,
 	Object_defineProperty,
 	atob,
+	URL_createObjectURL,
+	URL_revokeObjectURL,
 } from "@/shared/snapshot";
 import { bytesToBase64 } from "@/shared/util";
 import { rewriteCss, unrewriteCss } from "@rewriters/css";
@@ -468,10 +470,14 @@ export default function (client: ScramjetClient, self: typeof window) {
 						}
 						const source = await response.text();
 						if (!source) throw new Error("Google OM SDK response was empty");
-						const blobUrl = self.URL.createObjectURL(
+						// Use the saved native URL functions. Scramjet's page-facing
+						// URL.createObjectURL rewrites the blob origin to the virtual
+						// remote site (play.geforcenow.com), which the browser cannot
+						// load as a local Blob URL from minason.online.
+						const blobUrl = URL_createObjectURL(
 							new self.Blob([source], { type: "application/javascript" })
 						);
-						const revokeBlobUrl = () => self.URL.revokeObjectURL(blobUrl);
+						const revokeBlobUrl = () => URL_revokeObjectURL(blobUrl);
 						script.addEventListener("load", revokeBlobUrl, { once: true });
 						script.addEventListener("error", revokeBlobUrl, { once: true });
 						client.natives.call(
