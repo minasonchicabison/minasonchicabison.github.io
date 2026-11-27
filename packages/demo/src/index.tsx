@@ -31,20 +31,9 @@ export function getTransport(
 }
 
 async function pickWisp(): Promise<string> {
-	const savedPreferred = getActiveWispUrl(demoSettingsStore.wispUrl);
-	// Only migrate the two retired built-in relays. Newly added relays and
-	// user-configured Wisp URLs remain eligible to stay selected.
-	const retiredBuiltIns = new Set([
-		"wss://byod.abstracteducation.loan/stream/534141f4509ce83f5bd805d11df1d7ce5d30a6679fd4c27dbf28fc7c2fb4a710/",
-		"wss://artemata.it/stream/534141f4509ce83f5bd805d11df1d7ce5d30a6679fd4c27dbf28fc7c2fb4a710/",
-	]);
-	const preferred = retiredBuiltIns.has(savedPreferred)
-		? DEFAULT_WISP_URL
-		: savedPreferred;
-	if (preferred !== savedPreferred) {
-		demoSettingsStore.wispUrl = preferred;
-		setActiveWispUrl(preferred);
-	}
+	// Honor the relay selected in the Wisp panel. Test it first; the normal
+	// candidate loop below still provides a fallback if its handshake fails.
+	const preferred = getActiveWispUrl(demoSettingsStore.wispUrl);
 
 	const candidates = [...new Set([preferred, ...WISP_URLS])];
 	for (const url of candidates) {
