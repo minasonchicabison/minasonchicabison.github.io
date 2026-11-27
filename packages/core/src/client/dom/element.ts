@@ -449,7 +449,9 @@ export default function (client: ScramjetClient, self: typeof window) {
 				} catch {}
 				if (
 					requestedUrl?.origin === "https://pagead2.googlesyndication.com" &&
-					requestedUrl.pathname === "/omsdk/releases/live/omweb-v1.js"
+					/^\/omsdk\/releases\/(?:live|control)\/omweb-v1\.js$/.test(
+						requestedUrl.pathname
+					)
 				) {
 					const script = ctx.this as HTMLScriptElement;
 					const remoteUrl = requestedUrl.href;
