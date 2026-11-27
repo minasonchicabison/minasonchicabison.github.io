@@ -470,25 +470,61 @@ export default function (client: ScramjetClient, self: typeof window) {
 						}
 						const source = await response.text();
 						if (!source) throw new Error("Google OM SDK response was empty");
-						// Use the saved native URL functions. Scramjet's page-facing
-						// URL.createObjectURL rewrites the blob origin to the virtual
-						// remote site (play.geforcenow.com), which the browser cannot
-						// load as a local Blob URL from minason.online.
+
+						// This request bypasses the normal service-worker fetch path,
+						// so apply the same Scramjet JS rewrite that rewriteBody uses
+						// for every other classic script before executing the source.
+						const rewrittenSource = rewriteJs(
+							source,
+							remoteUrl,
+							client.context,
+							client.meta,
+							false
+						);
+						const rewrittenText =
+							typeof rewrittenSource === "string"
+								? rewrittenSource
+								: new self.TextDecoder().decode(rewrittenSource);
+
+						// Use the saved native URL functions so the Blob URL keeps the
+						// real Minason origin instead of the virtual GeForce NOW origin.
 						const blobUrl = URL_createObjectURL(
-							new self.Blob([source], { type: "application/javascript" })
+							new self.Blob([rewrittenText], {
+								type: "application/javascript",
+							})
 						);
 						const revokeBlobUrl = () => URL_revokeObjectURL(blobUrl);
-						script.addEventListener("load", revokeBlobUrl, { once: true });
-						script.addEventListener("error", revokeBlobUrl, { once: true });
+						script.addEventListener(
+							"load",
+							() => {
+								revokeBlobUrl();
+								console.info("[Minason OM SDK] script load event fired", {
+									status: response.status,
+									characters: rewrittenText.length,
+									rewritten: true,
+								});
+							},
+							{ once: true }
+						);
+						script.addEventListener(
+							"error",
+							() => {
+								revokeBlobUrl();
+								console.error("[Minason OM SDK] script load event failed", {
+									url: remoteUrl,
+								});
+							},
+							{ once: true }
+						);
 						client.natives.call(
 							"Element.prototype.setAttribute",
 							script,
 							"src",
 							blobUrl
 						);
-						console.info("[Minason OM SDK] loaded through proxy transport", {
+						console.info("[Minason OM SDK] fetched and rewritten", {
 							status: response.status,
-							characters: source.length,
+							characters: rewrittenText.length,
 						});
 					})().catch((error) => {
 						console.error("[Minason OM SDK] proxy transport load failed", {
