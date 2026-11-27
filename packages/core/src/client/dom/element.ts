@@ -314,6 +314,21 @@ export default function (client: ScramjetClient, self: typeof window) {
 		},
 	});
 
+	// Keep media currentSrc consistent with the virtual URL exposed by src.
+	// Without this, video players and ad SDKs can observe Minason's rewritten
+	// host URL instead of the original media URL. Blob-backed media must use
+	// the blob-aware unrewrite path because blob URLs cannot be fetched remotely.
+	client.Trap("HTMLMediaElement.prototype.currentSrc", {
+		get(ctx) {
+			const currentSrc = ctx.get() as string;
+			if (!currentSrc) return currentSrc;
+			if (currentSrc.startsWith("blob:")) {
+				return unrewriteBlob(currentSrc, client.context, client.meta);
+			}
+			return unrewriteUrl(currentSrc, client.context);
+		},
+	});
+
 	// note that href is not here
 	const urlprops = [
 		"protocol",
