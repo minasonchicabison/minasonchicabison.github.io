@@ -672,6 +672,42 @@ export default function (client: ScramjetClient, self: typeof window) {
 				if (element.tagName?.toLowerCase() === "iframe") {
 					const iframe = element as HTMLIFrameElement;
 					iframes.add(iframe);
+
+					// GeForce NOW's free-tier preroll is rendered by IMA inside
+					// nested cross-origin frames. The outer Minason frame already
+					// delegates autoplay, but each ad frame must carry that
+					// permission forward or Chrome can leave the video surface blank.
+					const hostname = client.url.hostname.toLowerCase();
+					if (
+						hostname === "imasdk.googleapis.com" ||
+						hostname === "geforcenow.com" ||
+						hostname.endsWith(".geforcenow.com")
+					) {
+						const existingAllow = client.natives.call(
+							"Element.prototype.getAttribute",
+							iframe,
+							"allow"
+						) as string | null;
+						const directives = (existingAllow || "")
+							.split(";")
+							.map((directive) => directive.trim())
+							.filter(Boolean);
+						const autoplayIndex = directives.findIndex((directive) =>
+							/^autoplay(?:\\s|$)/i.test(directive)
+						);
+						if (autoplayIndex >= 0) {
+							directives[autoplayIndex] = "autoplay *";
+						} else {
+							directives.push("autoplay *");
+						}
+						client.natives.call(
+							"Element.prototype.setAttribute",
+							iframe,
+							"allow",
+							directives.join("; ")
+						);
+					}
+
 					const sandbox = client.natives.call(
 						"Element.prototype.getAttribute",
 						iframe,
