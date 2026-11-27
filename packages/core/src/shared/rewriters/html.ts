@@ -348,6 +348,43 @@ function traverseParsedHtml(
 	context: ScramjetContext,
 	meta: URLMeta
 ) {
+	if (node.name === "iframe") {
+		const hostname = meta.origin.hostname.toLowerCase();
+		const autoplayFrameHosts = [
+			"geforcenow.com",
+			"imasdk.googleapis.com",
+			"doubleclick.net",
+			"googlesyndication.com",
+			"googleadservices.com",
+			"googletagservices.com",
+			"2mdn.net",
+			"doubleverify.com",
+			"moatads.com",
+			"adsafeprotected.com",
+			"flashtalking.com",
+			"artsai.com",
+			"serving-sys.com",
+			"fwmrm.net",
+			"innovid.com",
+		];
+		if (
+			autoplayFrameHosts.some(
+				(host) => hostname === host || hostname.endsWith("." + host)
+			)
+		) {
+			const directives = (node.attribs.allow ?? "")
+				.split(";")
+				.map((directive: string) => directive.trim())
+				.filter(Boolean);
+			const autoplayIndex = directives.findIndex((directive: string) =>
+				/^autoplay(?:\s|$)/i.test(directive)
+			);
+			if (autoplayIndex >= 0) directives[autoplayIndex] = "autoplay *";
+			else directives.push("autoplay *");
+			node.attribs.allow = directives.join("; ");
+		}
+	}
+
 	if (node.name === "base" && node.attribs.href !== undefined) {
 		meta.base = new _URL(node.attribs.href, meta.origin);
 	}
