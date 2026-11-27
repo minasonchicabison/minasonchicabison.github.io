@@ -185,14 +185,13 @@ const AD_HOST_RE =
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-// Ad verification / VAST vendors that decide whether to serve an ad from the
-// requesting IP's reputation. Through the Wisp relay they see a datacenter IP,
-// treat it as invalid traffic and answer with an empty VAST (the log shows the
-// ad chain ending right after DoubleVerify / IAS with no creative ever
-// requested). These are plain CORS GETs, so ask them straight from the user's
-// browser (a normal IP) first and fall back to the relay if that fails.
+// Ad verification / VAST vendors can reject datacenter relay IPs; Google's
+// ad delivery endpoints also fail TLS through some Wisp/libcurl combinations
+// (the reported error was curl SSL connect error 35 on pagead2). These are
+// GET ad requests, so try the browser's native network first; if CORS or the
+// endpoint refuses that path, retain the existing relay fallback.
 const DIRECT_FIRST_HOST_RE =
-	/(^|\.)(doubleverify\.com|adsafeprotected\.com|moatads\.com|flashtalking\.com|innovid\.com)$/i;
+	/(^|\.)(doubleverify\.com|adsafeprotected\.com|moatads\.com|flashtalking\.com|innovid\.com|doubleclick\.net|googlesyndication\.com|googleadservices\.com)$/i;
 
 async function fetchDirectFromBrowser(
 	url: URL,
@@ -226,6 +225,14 @@ async function fetchDirectFromBrowser(
 			native.status,
 			url.hostname + url.pathname
 		);
+		// A direct 4xx/5xx may be specific to browser-origin policy; let the
+		// relay try rather than turning that into a definitive ad failure.
+		if (native.status >= 400) {
+			try {
+				await native.body?.cancel();
+			} catch {}
+			return null;
+		}
 		// show what the vendor actually answered with, to diagnose empty VASTs
 		native
 			.clone()
