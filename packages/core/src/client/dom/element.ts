@@ -693,7 +693,7 @@ export default function (client: ScramjetClient, self: typeof window) {
 							.map((directive) => directive.trim())
 							.filter(Boolean);
 						const autoplayIndex = directives.findIndex((directive) =>
-							/^autoplay(?:\\s|$)/i.test(directive)
+							/^autoplay(?:\s|$)/i.test(directive)
 						);
 						if (autoplayIndex >= 0) {
 							directives[autoplayIndex] = "autoplay *";
