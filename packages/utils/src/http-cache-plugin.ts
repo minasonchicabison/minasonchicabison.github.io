@@ -65,7 +65,7 @@ const LEGACY_CACHE_NAMES = ["scramjet-http-cache-v2"];
  * leaves the GeForce NOW queue stuck on "ad failed / blocked".
  */
 const NO_CACHE_HOST_RE =
-	/(^|\.)(doubleclick\.net|googlesyndication\.com|googleadservices\.com|googletagservices\.com|googletagmanager\.com|google-analytics\.com|imasdk\.googleapis\.com|2mdn\.net|doubleverify\.com|moatads\.com|adsafeprotected\.com|adnxs\.com|innovid\.com|serving-sys\.com|ad\.gt|adsrvr\.org|openx\.net|pubmatic\.com|rubiconproject\.com|casalemedia\.com|criteo\.com|taboola\.com|outbrain\.com|amazon-adsystem\.com|spotxchange\.com|springserve\.com|freewheel\.tv|fwmrm\.net)$/i;
+	/(^|\.)(doubleclick\.net|googlesyndication\.com|googleadservices\.com|googletagservices\.com|googletagmanager\.com|google-analytics\.com|imasdk\.googleapis\.com|2mdn\.net|doubleverify\.com|moatads\.com|adsafeprotected\.com|adnxs\.com|innovid\.com|flashtalking\.com|serving-sys\.com|ad\.gt|adsrvr\.org|openx\.net|pubmatic\.com|rubiconproject\.com|casalemedia\.com|criteo\.com|taboola\.com|outbrain\.com|amazon-adsystem\.com|spotxchange\.com|springserve\.com|freewheel\.tv|fwmrm\.net)$/i;
 
 function shouldBypassCache(
 	url: string,
