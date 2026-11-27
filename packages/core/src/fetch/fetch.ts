@@ -181,7 +181,7 @@ export async function doHandleFetch(
 // relay, and a single transient failure makes the page conclude the ad was
 // "blocked" and leaves the queue stuck.
 const AD_HOST_RE =
-	/(^|\.)(doubleclick\.net|googlesyndication\.com|googleadservices\.com|googletagservices\.com|imasdk\.googleapis\.com|2mdn\.net|doubleverify\.com|moatads\.com|adsafeprotected\.com|googlevideo\.com|gvt1\.com|innovid\.com|serving-sys\.com|fwmrm\.net)$/i;
+	/(^|\.)(doubleclick\.net|googlesyndication\.com|googleadservices\.com|googletagservices\.com|imasdk\.googleapis\.com|2mdn\.net|doubleverify\.com|moatads\.com|adsafeprotected\.com|googlevideo\.com|gvt1\.com|innovid\.com|flashtalking\.com|serving-sys\.com|fwmrm\.net)$/i;
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
