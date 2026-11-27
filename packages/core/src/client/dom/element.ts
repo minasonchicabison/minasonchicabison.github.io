@@ -419,6 +419,39 @@ export default function (client: ScramjetClient, self: typeof window) {
 			if (value != null) value = String(value);
 			ctx.args[1] = value;
 
+			// Diagnose the exact frame that creates the failing Google OM SDK
+			// script. A proxied URL can still fall through to GitHub Pages when
+			// the requesting document has an opaque origin/no SW controller.
+			if (
+				tagName === "script" &&
+				String(name).toLowerCase() === "src" &&
+				typeof value === "string" &&
+				value.includes("omweb-v1.js")
+			) {
+				let controllerUrl: string | null = null;
+				let frameHref = "unavailable";
+				let frameOrigin = "unavailable";
+				let frameSandbox: string | null = null;
+				try {
+					controllerUrl =
+						self.navigator.serviceWorker?.controller?.scriptURL ?? null;
+				} catch {}
+				try {
+					frameHref = self.location.href;
+					frameOrigin = self.location.origin;
+				} catch {}
+				try {
+					frameSandbox = self.frameElement?.getAttribute("sandbox") ?? null;
+				} catch {}
+				console.warn("[Minason OM SDK] request context", {
+					frameHref,
+					frameOrigin,
+					serviceWorkerController: controllerUrl,
+					frameSandbox,
+					requestedUrl: value,
+				});
+			}
+
 			const ruleList = htmlRules.find((rule) => {
 				const r = rule[name.toLowerCase()];
 				if (!r) return false;
@@ -588,14 +621,26 @@ export default function (client: ScramjetClient, self: typeof window) {
 					try {
 						const childWindow = iframe.contentWindow;
 						if (childWindow) {
-							console.info(
-								"[Minason iframe] hooked inserted iframe context",
-								iframe.getAttribute("src") || "about:blank"
-							);
+							let controllerUrl: string | null = null;
+						let childOrigin = "unavailable";
+						try {
+							controllerUrl =
+								childWindow.navigator.serviceWorker?.controller?.scriptURL ??
+								null;
+						} catch {}
+						try {
+							childOrigin = childWindow.location.origin;
+						} catch {}
+						console.info("[Minason iframe] inserted frame state", {
+							src: iframe.getAttribute("src") || "about:blank",
+							virtualSandbox: iframe.getAttribute("sandbox"),
+							serviceWorkerController: controllerUrl,
+							childOrigin,
+						});
 						}
 					} catch (error) {
 						console.warn(
-							"[Minason iframe] unable to hook inserted iframe context",
+							"[Minason iframe] unable to inspect inserted frame",
 							iframe.getAttribute("src") || "about:blank",
 							error
 						);
