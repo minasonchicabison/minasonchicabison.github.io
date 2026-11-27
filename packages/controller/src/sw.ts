@@ -11,6 +11,10 @@ function makeId(): string {
 const cookieResolvers: Record<string, (value: void) => void> = {};
 addEventListener("message", (e) => {
 	if (!e.data) return;
+	if (e.data.$sw$claimClients) {
+		e.waitUntil(self.clients.claim());
+		return;
+	}
 	if (typeof e.data != "object") return;
 	if (e.data.$sw$setCookieDone && typeof e.data.$sw$setCookieDone == "object") {
 		const done = e.data.$sw$setCookieDone;

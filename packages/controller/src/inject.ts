@@ -163,7 +163,39 @@ class RemoteTransport implements ProxyTransport {
 	}
 }
 
-const sw = navigator.serviceWorker.controller;
+async function waitForServiceWorkerController(
+	serviceWorkers: ServiceWorkerContainer | undefined,
+	timeoutMs = 5000
+): Promise<ServiceWorker | null> {
+	if (!serviceWorkers) return null;
+	if (serviceWorkers.controller) return serviceWorkers.controller;
+
+	let registration: ServiceWorkerRegistration | null = null;
+	try {
+		registration = await Promise.race([
+			serviceWorkers.ready,
+			new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs)),
+		]);
+	} catch {}
+
+	registration?.active?.postMessage({ $sw$claimClients: true });
+	if (serviceWorkers.controller) return serviceWorkers.controller;
+
+	return await new Promise<ServiceWorker | null>((resolve) => {
+		let finished = false;
+		const finish = () => {
+			if (finished) return;
+			finished = true;
+			clearTimeout(timeout);
+			serviceWorkers.removeEventListener("controllerchange", onChange);
+			resolve(serviceWorkers.controller);
+		};
+		const onChange = () => finish();
+		const timeout = setTimeout(finish, timeoutMs);
+		serviceWorkers.addEventListener("controllerchange", onChange, { once: true });
+		if (serviceWorkers.controller) finish();
+	});
+}
 
 type Init = {
 	config: Config;
@@ -222,14 +254,39 @@ class ExecutionContextWrapper {
 	) {
 		const channel = new MessageChannel();
 		this.transport = new RemoteTransport(channel.port1);
-		sw?.postMessage(
-			{
-				$sw$initRemoteTransport: {
-					port: channel.port2,
-					prefix: this.init.prefix.href,
-				},
+		let serviceWorkers: ServiceWorkerContainer | undefined;
+		try {
+			serviceWorkers = this.global.navigator.serviceWorker;
+		} catch {}
+
+		void waitForServiceWorkerController(serviceWorkers).then(
+			(sw) => {
+				if (!sw) {
+					channel.port2.close();
+					console.warn(
+						"[Minason SW] no controller for proxy frame",
+						this.global.location?.href
+					);
+					return;
+				}
+				console.info(
+					"[Minason SW] proxy frame controlled",
+					this.global.location?.href
+				);
+				sw.postMessage(
+					{
+						$sw$initRemoteTransport: {
+							port: channel.port2,
+							prefix: this.init.prefix.href,
+						},
+					},
+					[channel.port2]
+				);
 			},
-			[channel.port2]
+			(error) => {
+				channel.port2.close();
+				console.warn("[Minason SW] controller wait failed", error);
+			}
 		);
 
 		this.cookieJar = new CookieJar();
