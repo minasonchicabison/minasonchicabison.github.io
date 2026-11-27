@@ -61,51 +61,95 @@ async function pickWisp(): Promise<string> {
 }
 
 function isCompatibleServiceWorker(
-	worker: ServiceWorker | null
+	worker: ServiceWorker | null,
+	expectedBuildId: string
 ): worker is ServiceWorker {
 	if (!worker) return false;
 	try {
 		const url = new URL(worker.scriptURL);
-		return url.origin === location.origin && url.pathname === "/sw.js";
+		return (
+			url.origin === location.origin &&
+			url.pathname === "/sw.js" &&
+			url.searchParams.get("v") === expectedBuildId
+		);
 	} catch {
 		return false;
 	}
 }
 
-async function waitForController(timeoutMs = 12000): Promise<ServiceWorker> {
+async function waitForController(
+	expectedBuildId: string,
+	timeoutMs = 20000
+): Promise<ServiceWorker> {
 	const currentController = () => {
 		const worker = navigator.serviceWorker.controller;
-		return isCompatibleServiceWorker(worker) ? worker : null;
+		return isCompatibleServiceWorker(worker, expectedBuildId) ? worker : null;
 	};
 
-	// Reuse the active Minason worker even while a newer build installs.
-	// The proxy worker interface stays compatible across Minason app releases.
+	// Do not start the proxy under an older worker. Its in-memory frame list
+	// and routing code may be stale even though the script path is still /sw.js.
 	const existing = currentController();
 	if (existing) return existing;
 
 	return await new Promise<ServiceWorker>((resolve, reject) => {
 		let timer = 0;
 		let settled = false;
+		let registration: ServiceWorkerRegistration | null = null;
+		const watchedWorkers = new Set<ServiceWorker>();
+
 		const cleanup = () => {
 			navigator.serviceWorker.removeEventListener("controllerchange", onChange);
+			registration?.removeEventListener("updatefound", onUpdateFound);
+			for (const worker of watchedWorkers) {
+				worker.removeEventListener("statechange", onChange);
+			}
 			window.clearTimeout(timer);
 		};
+
 		const finish = (worker: ServiceWorker | null) => {
 			if (settled || !worker) return;
 			settled = true;
 			cleanup();
 			resolve(worker);
 		};
+
 		const onChange = () => finish(currentController());
+		const watchWorker = (worker: ServiceWorker | null) => {
+			if (!worker || watchedWorkers.has(worker)) return;
+			watchedWorkers.add(worker);
+			worker.addEventListener("statechange", onChange);
+		};
+		const onUpdateFound = () => watchWorker(registration?.installing ?? null);
 
 		navigator.serviceWorker.addEventListener("controllerchange", onChange);
 		timer = window.setTimeout(() => {
 			if (settled) return;
 			settled = true;
 			cleanup();
-			reject(new Error("The browser worker did not become ready in time."));
+			reject(
+				new Error(
+					"The updated Minason Web worker did not take control. Reload the page and try again."
+				)
+			);
 		}, timeoutMs);
-		void navigator.serviceWorker.ready.then(onChange).catch(() => {});
+
+		void navigator.serviceWorker.ready.then((readyRegistration) => {
+			if (settled) return;
+			registration = readyRegistration;
+			registration.addEventListener("updatefound", onUpdateFound);
+			watchWorker(registration.installing);
+			watchWorker(registration.waiting);
+			onChange();
+
+			// Force a fresh update check, then wait until this build controls
+			// the page. updateViaCache:"none" is also set during registration.
+			void registration.update().then(() => {
+				watchWorker(registration?.installing ?? null);
+				watchWorker(registration?.waiting ?? null);
+				onChange();
+			}).catch(() => {});
+		}).catch(() => {});
+
 		onChange();
 	});
 }
@@ -133,7 +177,7 @@ async function init() {
 		});
 
 		updateBoot("Preparing your browser engine", "SETTING UP YOUR WORKSPACE", 23);
-		const readySw = await waitForController();
+		const readySw = await waitForController(__MW_BUILD_ID__);
 		updateBoot("Finding the fastest available route", "CHECKING NETWORK RELAYS", 39);
 		const wisp = await pickWisp();
 		updateBoot("Connecting your browser", "STARTING NETWORK TRANSPORT", 59);
