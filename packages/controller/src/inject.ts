@@ -328,7 +328,7 @@ class ExecutionContextWrapper {
 			}
 
 			if (typeof payload.id === "string") {
-				const targetSw = navigator.serviceWorker?.controller ?? sw;
+				const targetSw = serviceWorkers.controller;
 				targetSw?.postMessage({
 					$sw$setCookieDone: {
 						id: payload.id,
@@ -337,7 +337,7 @@ class ExecutionContextWrapper {
 			}
 		};
 
-		navigator.serviceWorker?.addEventListener(
+		serviceWorkers.addEventListener(
 			"message",
 			this.handleServiceWorkerCookieMessage
 		);
