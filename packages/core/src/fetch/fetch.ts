@@ -185,65 +185,6 @@ const AD_HOST_RE =
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-// IMA's documented default deadline for each VAST wrapper is 5 seconds.
-// Keep the optional direct request comfortably below that limit so a slow
-// vendor cannot hold the ad chain open after IMA has already timed out.
-const AD_VENDOR_DIRECT_TIMEOUT_MS = 2500;
-
-// These VAST verification vendors are attempted directly only as a fast
-// fallback path; requests that do not return promptly continue through the
-// configured proxy transport.
-const DIRECT_FIRST_HOST_RE =
-	/(^|\.)(doubleverify\.com|adsafeprotected\.com|moatads\.com|flashtalking\.com|innovid\.com)$/i;
-
-async function fetchDirectFromBrowser(
-	url: URL,
-	init: BareRequestInit
-): Promise<BareResponse | null> {
-	const startedAt = Date.now();
-	try {
-		const headers = new Headers();
-		for (const [k, v] of ((init.headers as any) || []) as [string, string][]) {
-			const lk = String(k).toLowerCase();
-			if (lk === "accept" || lk === "accept-language") headers.set(lk, String(v));
-		}
-		const ctrl = new AbortController();
-		const timer = setTimeout(
-			() => ctrl.abort(),
-			AD_VENDOR_DIRECT_TIMEOUT_MS
-		);
-		let native: Response;
-		try {
-			native = await fetch(url.href, {
-				method: "GET",
-				headers,
-				mode: "cors",
-				credentials: "omit",
-				redirect: "follow",
-				referrerPolicy: "no-referrer",
-				cache: "no-store",
-				signal: ctrl.signal,
-			});
-		} finally {
-			clearTimeout(timer);
-		}
-		console.info(
-			"[Minason ads] direct (browser IP)",
-			native.status,
-			Date.now() - startedAt + "ms",
-			url.hostname + url.pathname
-		);
-		return BareResponse.fromNativeResponse(native);
-	} catch (err) {
-		console.warn(
-			"[Minason ads] direct fetch failed, using relay",
-			Date.now() - startedAt + "ms",
-			url.hostname,
-			err
-		);
-		return null;
-	}
-}
 
 /**
  * transport.request wrapper that retries idempotent, body-less requests when
@@ -261,15 +202,6 @@ async function fetchWithRetry(
 	const idempotent = (method === "GET" || method === "HEAD") && !init.body;
 	const isAd = AD_HOST_RE.test(url.hostname);
 	const maxAttempts = idempotent ? 3 : 1;
-
-	if (
-		method === "GET" &&
-		!init.body &&
-		DIRECT_FIRST_HOST_RE.test(url.hostname)
-	) {
-		const direct = await fetchDirectFromBrowser(url, init);
-		if (direct) return direct;
-	}
 
 	let lastError: unknown;
 	for (let attempt = 1; attempt <= maxAttempts; attempt++) {
