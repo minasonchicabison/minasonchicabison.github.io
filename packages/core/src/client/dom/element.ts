@@ -491,6 +491,87 @@ export default function (client: ScramjetClient, self: typeof window) {
 		element.tagName?.toLowerCase() === "iframe" &&
 		String(name).toLowerCase() === "sandbox";
 
+	// Some ad SDKs build iframe nodes with sandbox attributes through APIs
+	// that don't pass through setAttribute/DOMTokenList interception. Strip
+	// any remaining native sandbox immediately before a node enters the DOM.
+	// This matches htmlRules' existing policy of virtualizing iframe sandbox.
+	const virtualizeSandboxInNode = (value: unknown) => {
+		if (!value || typeof value !== "object" || !("nodeType" in value)) return;
+
+		const visit = (node: Node) => {
+			if (node.nodeType === 1) {
+				const element = node as Element;
+				if (element.tagName?.toLowerCase() === "iframe") {
+					const sandbox = client.natives.call(
+						"Element.prototype.getAttribute",
+						element,
+						"sandbox"
+					) as string | null;
+					if (sandbox !== null) {
+						client.natives.call(
+							"Element.prototype.setAttribute",
+							element,
+							"scramjet-attr-sandbox",
+							sandbox
+						);
+						client.natives.call(
+							"Element.prototype.removeAttribute",
+							element,
+							"sandbox"
+						);
+						console.info(
+							"[Minason iframe] virtualized sandbox before insertion",
+							client.natives.call(
+								"Element.prototype.getAttribute",
+								element,
+								"src"
+							) || "about:blank"
+						);
+					}
+				}
+			}
+
+			let child = node.firstChild;
+			while (child) {
+				const next = child.nextSibling;
+				visit(child);
+				child = next;
+			}
+		};
+
+		visit(value as Node);
+	};
+
+	const virtualizeSandboxInArgs = (args: unknown[]) => {
+		for (const value of args) virtualizeSandboxInNode(value);
+	};
+
+	client.Proxy(
+		[
+			"Node.prototype.appendChild",
+			"Node.prototype.insertBefore",
+			"Node.prototype.replaceChild",
+			"Element.prototype.append",
+			"Element.prototype.prepend",
+			"Element.prototype.replaceChildren",
+			"Element.prototype.replaceWith",
+			"Element.prototype.before",
+			"Element.prototype.after",
+			"Document.prototype.append",
+			"Document.prototype.prepend",
+			"Document.prototype.replaceChildren",
+			"DocumentFragment.prototype.append",
+			"DocumentFragment.prototype.prepend",
+			"DocumentFragment.prototype.replaceChildren",
+			"Range.prototype.insertNode",
+		],
+		{
+			apply(ctx) {
+				virtualizeSandboxInArgs(ctx.args);
+			},
+		}
+	);
+
 	client.Proxy("Element.prototype.setAttributeNS", {
 		apply(ctx) {
 			// TODO: this could leak by like calling stringify twice or some dumb shit lol
