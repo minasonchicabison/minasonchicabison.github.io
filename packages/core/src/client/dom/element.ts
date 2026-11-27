@@ -7,6 +7,7 @@ import {
 	atob,
 	URL_createObjectURL,
 	URL_revokeObjectURL,
+	_URL,
 } from "@/shared/snapshot";
 import { bytesToBase64 } from "@/shared/util";
 import { rewriteCss, unrewriteCss } from "@rewriters/css";
@@ -471,6 +472,16 @@ export default function (client: ScramjetClient, self: typeof window) {
 						const source = await response.text();
 						if (!source) throw new Error("Google OM SDK response was empty");
 
+						// Match parseRequest(): the rewrite base and origin must be
+						// the script URL, not the GeForce NOW document URL.
+						const scriptMeta = {
+							origin: new _URL(remoteUrl),
+							base: new _URL(remoteUrl),
+							topFrameName: client.meta.topFrameName,
+							parentFrameName: client.meta.parentFrameName,
+							referrerPolicy: client.meta.referrerPolicy,
+						};
+
 						// This request bypasses the normal service-worker fetch path,
 						// so apply the same Scramjet JS rewrite that rewriteBody uses
 						// for every other classic script before executing the source.
@@ -478,7 +489,7 @@ export default function (client: ScramjetClient, self: typeof window) {
 							source,
 							remoteUrl,
 							client.context,
-							client.meta,
+							scriptMeta,
 							false
 						);
 						const rewrittenText =
