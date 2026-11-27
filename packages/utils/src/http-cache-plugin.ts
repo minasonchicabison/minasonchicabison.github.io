@@ -53,7 +53,36 @@ import {
 import { ManagedPlugin } from "@mercuryworkshop/scramjet-controller";
 import type { Frame } from "@mercuryworkshop/scramjet-controller";
 
-export const CACHE_NAME = "scramjet-http-cache-v2";
+// Bumped to v3: v2 could hold stale/failed (404, etc.) ad responses that
+// broke GeForce NOW queue ads. Old caches are deleted on first use.
+export const CACHE_NAME = "scramjet-http-cache-v3";
+const LEGACY_CACHE_NAMES = ["scramjet-http-cache-v2"];
+
+/**
+ * Traffic that must never be cached or buffered: ad delivery / verification
+ * (VAST, IMA, OM SDK, ad video) is per-session, single-use and streamed.
+ * Caching it replays stale ad tokens and buffering delays ad playback, which
+ * leaves the GeForce NOW queue stuck on "ad failed / blocked".
+ */
+const NO_CACHE_HOST_RE =
+	/(^|\.)(doubleclick\.net|googlesyndication\.com|googleadservices\.com|googletagservices\.com|googletagmanager\.com|google-analytics\.com|imasdk\.googleapis\.com|2mdn\.net|doubleverify\.com|moatads\.com|adsafeprotected\.com|adnxs\.com|innovid\.com|serving-sys\.com|ad\.gt|adsrvr\.org|openx\.net|pubmatic\.com|rubiconproject\.com|casalemedia\.com|criteo\.com|taboola\.com|outbrain\.com|amazon-adsystem\.com|spotxchange\.com|springserve\.com|freewheel\.tv|fwmrm\.net)$/i;
+
+function shouldBypassCache(
+	url: string,
+	req: ScramjetFetchRequest
+): boolean {
+	try {
+		const u = new URL(url);
+		if (NO_CACHE_HOST_RE.test(u.hostname)) return true;
+		// Large streamed media (ad video) and ranged requests: don't buffer.
+		const dest = req.rawDestination as string;
+		if (dest === "video" || dest === "audio" || dest === "track") return true;
+		if (req.initialHeaders.has("range")) return true;
+	} catch {
+		return true;
+	}
+	return false;
+}
 
 /** Header recording when this entry entered the cache (ms since epoch). */
 const STORED_AT_HEADER = "x-sj-cached-at";
@@ -321,6 +350,12 @@ export class HttpCachePlugin extends ManagedPlugin {
 	private openCache(): Promise<Cache> {
 		if (!this.cachePromise) {
 			this.cachePromise = caches.open(this.cacheName);
+			// Drop superseded caches that may hold stale/failed ad responses.
+			for (const legacy of LEGACY_CACHE_NAMES) {
+				if (legacy !== this.cacheName) {
+					caches.delete(legacy).catch(() => {});
+				}
+			}
 		}
 		return this.cachePromise;
 	}
@@ -339,6 +374,7 @@ export class HttpCachePlugin extends ManagedPlugin {
 			if (reqCache === "no-store" || reqCache === "reload") return;
 			// Don't undo an earlyResponse another plugin already set.
 			if (props.earlyResponse) return;
+			if (shouldBypassCache(ctx.parsed.url.href, req)) return;
 
 			const cache = await this.openCache();
 			const stored = await cache.match(
@@ -425,6 +461,7 @@ export class HttpCachePlugin extends ManagedPlugin {
 
 			if ((req.cache as string) === "no-store") return;
 			if (!isCacheableMethod(req.method)) return;
+			if (shouldBypassCache(ctx.parsed.url.href, req)) return;
 
 			const headers = nativeHeadersFromRaw(props.response.rawHeaders);
 			if (!responseIsStorable(props.response.status, headers, req.method))
