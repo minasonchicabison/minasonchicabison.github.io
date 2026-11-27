@@ -59,6 +59,24 @@ export const htmlRules: {
 		},
 		sandbox: ["iframe"],
 	},
+
+	{
+		// Preserve existing iframe permissions while forwarding autoplay through
+		// nested ad SDK and creative frames.
+		fn: (value) => {
+			const directives = value
+				.split(";")
+				.map((directive) => directive.trim())
+				.filter(Boolean);
+			const autoplayIndex = directives.findIndex((directive) =>
+				/^autoplay(?:\s|$)/i.test(directive)
+			);
+			if (autoplayIndex >= 0) directives[autoplayIndex] = "autoplay *";
+			else directives.push("autoplay *");
+			return directives.join("; ");
+		},
+		allow: ["iframe"],
+	},
 	{
 		fn: (value, context, meta) => {
 			if (value.startsWith("blob:")) {
