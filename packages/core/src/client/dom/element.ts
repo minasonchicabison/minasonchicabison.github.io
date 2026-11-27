@@ -495,35 +495,40 @@ export default function (client: ScramjetClient, self: typeof window) {
 	// that don't pass through setAttribute/DOMTokenList interception. Strip
 	// any remaining native sandbox immediately before a node enters the DOM.
 	// This matches htmlRules' existing policy of virtualizing iframe sandbox.
-	const virtualizeSandboxInNode = (value: unknown) => {
+	const virtualizeSandboxInNode = (
+		value: unknown,
+		iframes: Set<HTMLIFrameElement>
+	) => {
 		if (!value || typeof value !== "object" || !("nodeType" in value)) return;
 
 		const visit = (node: Node) => {
 			if (node.nodeType === 1) {
 				const element = node as Element;
 				if (element.tagName?.toLowerCase() === "iframe") {
+					const iframe = element as HTMLIFrameElement;
+					iframes.add(iframe);
 					const sandbox = client.natives.call(
 						"Element.prototype.getAttribute",
-						element,
+						iframe,
 						"sandbox"
 					) as string | null;
 					if (sandbox !== null) {
 						client.natives.call(
 							"Element.prototype.setAttribute",
-							element,
+							iframe,
 							"scramjet-attr-sandbox",
 							sandbox
 						);
 						client.natives.call(
 							"Element.prototype.removeAttribute",
-							element,
+							iframe,
 							"sandbox"
 						);
 						console.info(
 							"[Minason iframe] virtualized sandbox before insertion",
 							client.natives.call(
 								"Element.prototype.getAttribute",
-								element,
+								iframe,
 								"src"
 							) || "about:blank"
 						);
@@ -543,7 +548,9 @@ export default function (client: ScramjetClient, self: typeof window) {
 	};
 
 	const virtualizeSandboxInArgs = (args: unknown[]) => {
-		for (const value of args) virtualizeSandboxInNode(value);
+		const iframes = new Set<HTMLIFrameElement>();
+		for (const value of args) virtualizeSandboxInNode(value, iframes);
+		return [...iframes];
 	};
 
 	client.Proxy(
@@ -567,7 +574,35 @@ export default function (client: ScramjetClient, self: typeof window) {
 		],
 		{
 			apply(ctx) {
-				virtualizeSandboxInArgs(ctx.args);
+				// Keep a reference to iframe descendants before insertion (a
+				// DocumentFragment is emptied by the native insertion call).
+				const iframes = virtualizeSandboxInArgs(ctx.args);
+				const result = ctx.call();
+
+				// about:blank/srcdoc helper frames do not receive rewritten HTML,
+				// so they may never execute the injected client bootstrap. Hook
+				// their Window immediately after insertion instead of waiting for
+				// the SDK to read iframe.contentWindow itself.
+				for (const iframe of iframes) {
+					if (!iframe.isConnected) continue;
+					try {
+						const childWindow = iframe.contentWindow;
+						if (childWindow) {
+							console.info(
+								"[Minason iframe] hooked inserted iframe context",
+								iframe.getAttribute("src") || "about:blank"
+							);
+						}
+					} catch (error) {
+						console.warn(
+							"[Minason iframe] unable to hook inserted iframe context",
+							iframe.getAttribute("src") || "about:blank",
+							error
+						);
+					}
+				}
+
+				ctx.return(result);
 			},
 		}
 	);
