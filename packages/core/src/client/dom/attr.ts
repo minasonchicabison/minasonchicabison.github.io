@@ -1,6 +1,7 @@
 import { ScramjetClient } from "@client/index";
 import {
 	Number,
+	String,
 	Object_keys,
 	Reflect_apply,
 	Reflect_get,
