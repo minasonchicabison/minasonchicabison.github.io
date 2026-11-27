@@ -199,69 +199,95 @@ export default function (client: ScramjetClient, self: typeof window) {
 	);
 	if (sandboxDescriptor && sandboxDescriptor.get) {
 		const inertSandboxLists = new WeakMap<object, any>();
-		const makeInertTokenList = () => {
-			const tokens: string[] = [];
+		const makeInertTokenList = (iframe: HTMLIFrameElement) => {
+			// Keep the DOMTokenList view backed by Scramjet's virtual attribute.
+			// setAttribute("sandbox", ...) stores the original value as
+			// scramjet-attr-sandbox while the html rule removes the real attribute,
+			// so the browser never applies an opaque-origin sandbox.
+			const readTokens = () => {
+				const value = iframe.getAttribute("sandbox") || "";
+				return value.trim() ? value.trim().split(/\s+/) : [];
+			};
+			const writeTokens = (tokens: string[]) => {
+				iframe.setAttribute("sandbox", tokens.join(" "));
+			};
 			const list: any = {
-				add: (...t: string[]) => {
-					for (const x of t) if (!tokens.includes(x)) tokens.push(x);
-				},
-				remove: (...t: string[]) => {
-					for (const x of t) {
-						const i = tokens.indexOf(x);
-						if (i >= 0) tokens.splice(i, 1);
+				add: (...newTokens: string[]) => {
+					const tokens = readTokens();
+					for (const token of newTokens) {
+						if (!tokens.includes(token)) tokens.push(token);
 					}
+					writeTokens(tokens);
 				},
-				toggle: (x: string, force?: boolean) => {
-					const has = tokens.includes(x);
+				remove: (...removeTokens: string[]) => {
+					const remove = new Set(removeTokens);
+					writeTokens(readTokens().filter((token) => !remove.has(token)));
+				},
+				toggle: (token: string, force?: boolean) => {
+					const tokens = readTokens();
+					const has = tokens.includes(token);
 					if (force === true || (force === undefined && !has)) {
-						if (!has) tokens.push(x);
+						if (!has) tokens.push(token);
+						writeTokens(tokens);
 						return true;
 					}
-					const i = tokens.indexOf(x);
-					if (i >= 0) tokens.splice(i, 1);
+					if (has) writeTokens(tokens.filter((item) => item !== token));
 					return false;
 				},
-				replace: (a: string, b: string) => {
-					const i = tokens.indexOf(a);
-					if (i < 0) return false;
-					tokens[i] = b;
+				replace: (oldToken: string, newToken: string) => {
+					const tokens = readTokens();
+					const index = tokens.indexOf(oldToken);
+					if (index < 0) return false;
+					if (tokens.includes(newToken)) tokens.splice(index, 1);
+					else tokens[index] = newToken;
+					writeTokens(tokens);
 					return true;
 				},
-				contains: (x: string) => tokens.includes(x),
-				// every sandbox keyword is "supported"; none are ever enforced
+				contains: (token: string) => readTokens().includes(token),
+				// Every sandbox keyword is "supported"; none are ever enforced.
 				supports: () => true,
-				item: (i: number) => tokens[i] ?? null,
+				item: (index: number) => readTokens()[index] ?? null,
 				forEach: (cb: any, thisArg?: any) =>
-					tokens.forEach((t, i) => cb.call(thisArg, t, i, list)),
-				toString: () => tokens.join(" "),
+					readTokens().forEach((token) =>
+						cb.call(thisArg, token, token, list)
+					),
+				entries: () =>
+					readTokens().map((token, index) => [index, token] as [number, string])[
+						Symbol.iterator
+					](),
+				keys: () => readTokens().map((_token, index) => index)[Symbol.iterator](),
+				values: () => readTokens()[Symbol.iterator](),
+				[Symbol.iterator]: () => readTokens()[Symbol.iterator](),
+				toString: () => readTokens().join(" "),
 				get length() {
-					return tokens.length;
+					return readTokens().length;
 				},
 				get value() {
-					return tokens.join(" ");
+					return readTokens().join(" ");
 				},
-				set value(v: string) {
-					tokens.length = 0;
-					for (const x of String(v).split(/\s+/)) if (x) tokens.push(x);
+				set value(value: string) {
+					const tokens: string[] = [];
+					for (const token of String(value).split(/\s+/)) {
+						if (token && !tokens.includes(token)) tokens.push(token);
+					}
+					writeTokens(tokens);
 				},
 			};
 			return list;
 		};
-
 		Object_defineProperty(self.HTMLIFrameElement.prototype, "sandbox", {
 			configurable: true,
 			enumerable: true,
 			get() {
 				let list = inertSandboxLists.get(this);
 				if (!list) {
-					list = makeInertTokenList();
+					list = makeInertTokenList(this);
 					inertSandboxLists.set(this, list);
 				}
 				return list;
 			},
 			set(value) {
-				const list = this.sandbox;
-				list.value = String(value);
+				this.setAttribute("sandbox", String(value));
 			},
 		});
 	}
