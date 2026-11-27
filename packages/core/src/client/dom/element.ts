@@ -392,8 +392,22 @@ export default function (client: ScramjetClient, self: typeof window) {
 
 	client.Proxy("Element.prototype.hasAttribute", {
 		apply(ctx) {
-			if (String(ctx.args[0]).startsWith("scramjet-attr"))
+			const name = String(ctx.args[0]);
+			if (name.startsWith("scramjet-attr"))
 				return ctx.return(false);
+			if (isVirtualIframeSandboxAttribute(ctx.this, name)) {
+				const virtual = client.natives.call(
+					"Element.prototype.hasAttribute",
+					ctx.this,
+					`scramjet-attr-${name}`
+				);
+				const real = client.natives.call(
+					"Element.prototype.hasAttribute",
+					ctx.this,
+					name
+				);
+				return ctx.return(Boolean(virtual || real));
+			}
 		},
 	});
 
@@ -553,6 +567,19 @@ export default function (client: ScramjetClient, self: typeof window) {
 		apply(ctx) {
 			const name = String(ctx.args[0]);
 			if (name.startsWith("scramjet-attr")) return ctx.return(undefined);
+			if (isVirtualIframeSandboxAttribute(ctx.this, name)) {
+				client.natives.call(
+					"Element.prototype.removeAttribute",
+					ctx.this,
+					`scramjet-attr-${name}`
+				);
+				client.natives.call(
+					"Element.prototype.removeAttribute",
+					ctx.this,
+					name
+				);
+				return ctx.return(undefined);
+			}
 			if (
 				client.natives.call("Element.prototype.hasAttribute", ctx.this, name)
 			) {
