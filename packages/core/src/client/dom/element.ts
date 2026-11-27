@@ -449,7 +449,7 @@ export default function (client: ScramjetClient, self: typeof window) {
 				} catch {}
 				if (
 					requestedUrl?.origin === "https://pagead2.googlesyndication.com" &&
-					/^\/omsdk\/releases\/(?:live|control)\/omweb-v1\.js$/.test(
+					/^\/omsdk\/releases\/[^/]+\/omweb-v1\.js$/.test(
 						requestedUrl.pathname
 					)
 				) {
