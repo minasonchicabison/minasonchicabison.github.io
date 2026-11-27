@@ -13,7 +13,7 @@ import { bytesToBase64 } from "@/shared/util";
 import { rewriteCss, unrewriteCss } from "@rewriters/css";
 import { rewriteHtml, unrewriteHtml } from "@rewriters/html";
 import { rewriteJs } from "@rewriters/js";
-import { unrewriteUrl } from "@rewriters/url";
+import { unrewriteBlob, unrewriteUrl } from "@rewriters/url";
 import { SCRAMJETCLIENT } from "@/symbols";
 import { ScramjetClient } from "@client/index";
 import {
@@ -387,6 +387,38 @@ export default function (client: ScramjetClient, self: typeof window) {
 				return unrewriteBlob(currentSrc, client.context, client.meta);
 			}
 			return unrewriteUrl(currentSrc, client.context);
+		},
+	});
+
+
+	client.Proxy("HTMLMediaElement.prototype.play", {
+		apply(ctx) {
+			const result = ctx.call();
+			try {
+				if (
+					isWithinGeForceNowFrameTree() &&
+					result &&
+					typeof (result as Promise<void>).catch === "function"
+				) {
+					const media = ctx.this as HTMLMediaElement;
+					(result as Promise<void>).catch((error: unknown) => {
+						let src = "";
+						try {
+							src = media.currentSrc || "";
+						} catch {}
+						console.warn("[Minason media] play() rejected", {
+							name: (error as Error)?.name,
+							message: (error as Error)?.message,
+							src,
+							readyState: media.readyState,
+							networkState: media.networkState,
+							mediaError: media.error?.code,
+							muted: media.muted,
+						});
+					});
+				}
+			} catch {}
+			ctx.return(result);
 		},
 	});
 
