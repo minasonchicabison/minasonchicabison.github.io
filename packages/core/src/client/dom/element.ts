@@ -150,6 +150,7 @@ export default function (client: ScramjetClient, self: typeof window) {
 	];
 
 	const attrs = Object_keys(attrObject);
+	const deferredScriptSources = new WeakMap<HTMLScriptElement, string>();
 
 	for (const attr of attrs) {
 		for (const element of attrObject[attr]) {
@@ -161,6 +162,15 @@ export default function (client: ScramjetClient, self: typeof window) {
 			);
 			Object_defineProperty(element.prototype, attr, {
 				get() {
+					if (
+						attr === "src" &&
+						(this as Element).tagName?.toLowerCase() === "script"
+					) {
+						const originalSrc = deferredScriptSources.get(
+							this as HTMLScriptElement
+						);
+						if (originalSrc) return originalSrc;
+					}
 					if (["src", "data", "href", "action", "formaction"].includes(attr)) {
 						return unrewriteUrl(descriptor.get.call(this), client.context);
 					}
@@ -418,6 +428,73 @@ export default function (client: ScramjetClient, self: typeof window) {
 
 			if (value != null) value = String(value);
 			ctx.args[1] = value;
+
+			// Google OM SDK is requested by an IMA helper frame that has no native
+			// service-worker controller. Its rewritten URL therefore falls through
+			// to the static host and returns 404. Fetch this one script through
+			// Scramjet's already-connected proxy transport, then load the exact
+			// response from a same-origin Blob URL. The virtual src remains the
+			// original Google URL for script-side URL inspection.
+			if (
+				tagName === "script" &&
+				String(name).toLowerCase() === "src" &&
+				typeof value === "string"
+			) {
+				let requestedUrl: URL | null = null;
+				try {
+					requestedUrl = new URL(value, client.url.href);
+				} catch {}
+				if (
+					requestedUrl?.origin === "https://pagead2.googlesyndication.com" &&
+					requestedUrl.pathname === "/omsdk/releases/live/omweb-v1.js"
+				) {
+					const script = ctx.this as HTMLScriptElement;
+					const remoteUrl = requestedUrl.href;
+					deferredScriptSources.set(script, remoteUrl);
+					client.natives.call(
+						"Element.prototype.setAttribute",
+						script,
+						"scramjet-attr-src",
+						remoteUrl
+					);
+					void (async () => {
+						const response = await client.bare.fetch(remoteUrl, {
+							headers: [["Referer", client.url.href]],
+						});
+						if (response.status < 200 || response.status >= 300) {
+							throw new Error(
+								`Google OM SDK request returned HTTP ${response.status}`
+							);
+						}
+						const source = await response.text();
+						if (!source) throw new Error("Google OM SDK response was empty");
+						const blobUrl = self.URL.createObjectURL(
+							new self.Blob([source], { type: "application/javascript" })
+						);
+						const revokeBlobUrl = () => self.URL.revokeObjectURL(blobUrl);
+						script.addEventListener("load", revokeBlobUrl, { once: true });
+						script.addEventListener("error", revokeBlobUrl, { once: true });
+						client.natives.call(
+							"Element.prototype.setAttribute",
+							script,
+							"src",
+							blobUrl
+						);
+						console.info("[Minason OM SDK] loaded through proxy transport", {
+							status: response.status,
+							characters: source.length,
+						});
+					})().catch((error) => {
+						console.error("[Minason OM SDK] proxy transport load failed", {
+							url: remoteUrl,
+							error,
+						});
+						script.dispatchEvent(new self.Event("error"));
+					});
+					ctx.return(undefined);
+					return;
+				}
+			}
 
 			// Diagnose the exact frame that creates the failing Google OM SDK
 			// script. A proxied URL can still fall through to GitHub Pages when
