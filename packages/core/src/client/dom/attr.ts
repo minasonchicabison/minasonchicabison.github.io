@@ -32,6 +32,47 @@ export default function (client: ScramjetClient) {
 						return new Proxy(value, {
 							apply(target, that, args) {
 								if (that === proxy) {
+									const isIframeSandbox =
+										element.tagName?.toLowerCase() === "iframe" &&
+										((prop === "setNamedItem" &&
+											(args[0] as Attr | null)?.namespaceURI == null &&
+											String((args[0] as Attr | null)?.name).toLowerCase() ===
+												"sandbox") ||
+										(prop === "setNamedItemNS" &&
+											args[0] != null &&
+											(args[0] as Attr).namespaceURI == null &&
+											String((args[0] as Attr).localName).toLowerCase() ===
+												"sandbox"));
+									if (isIframeSandbox) {
+										const attr = args[0] as Attr;
+										const previousValue = element.getAttribute("sandbox");
+										let previous: Attr | null = null;
+										if (previousValue !== null) {
+											previous =
+												element.ownerDocument.createAttribute("sandbox");
+											previous.value = previousValue;
+										}
+										element.setAttribute("sandbox", attr.value);
+										return previous;
+									}
+									if (
+										element.tagName?.toLowerCase() === "iframe" &&
+										((prop === "removeNamedItem" &&
+											String(args[0]).toLowerCase() === "sandbox") ||
+										(prop === "removeNamedItemNS" &&
+											args[0] == null &&
+											String(args[1]).toLowerCase() === "sandbox"))
+									) {
+										const previousValue = element.getAttribute("sandbox");
+										if (previousValue === null) {
+											return Reflect_apply(target, map, args);
+										}
+										element.removeAttribute("sandbox");
+										const previous =
+											element.ownerDocument.createAttribute("sandbox");
+										previous.value = previousValue;
+										return previous;
+									}
 									return Reflect_apply(target, map, args);
 								}
 
