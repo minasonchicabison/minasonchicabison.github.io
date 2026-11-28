@@ -122,6 +122,29 @@ export default [
 		},
 	}),
 	multiFrameTest({
+		name: "postmessage-cross-frame-string-sender",
+		root: {
+			js: () => `
+                addEventListener("message", (event) => {
+                    const child = document.querySelector("iframe");
+                    assertEqual(event.data, "adsLoaded", "message should be unchanged");
+                    assertEqual(event.source === child.contentWindow, true, "source should be the sending iframe");
+                    assertEqual(event.origin, new URL(child.src).origin, "origin should be the sending iframe's origin");
+                    pass();
+                });
+            `,
+			subframes: [
+				{
+					originid: "cross",
+					id: "child",
+					js: () => `
+                        parent.postMessage("adsLoaded", "*");
+                    `,
+				},
+			],
+		},
+	}),
+	multiFrameTest({
 		name: "postmessage-multi-frame-sanity-reverse-cross",
 		root: {
 			js: () => `

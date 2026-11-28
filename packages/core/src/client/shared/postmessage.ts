@@ -1,11 +1,40 @@
 import { iswindow } from "@client/entry";
 import { SCRAMJETCLIENT } from "@/symbols";
 import { ScramjetClient } from "@client/index";
-import { Object_defineProperty } from "@/shared/snapshot";
+import { Object_defineProperty, Reflect_apply } from "@/shared/snapshot";
 import { POLLUTANT } from "./realm";
 
+function wrapWindowMessage(caller: ScramjetClient, args: any[]) {
+	const inheritsOrigin =
+		caller.url.href === "about:srcdoc" || caller.url.href === "about:blank";
+	args[0] = {
+		$scramjet$messagetype: "window",
+		$scramjet$origin: inheritsOrigin
+			? (caller.global.parent[SCRAMJETCLIENT]?.url.origin ?? caller.url.origin)
+			: caller.url.origin,
+		$scramjet$data: args[0],
+	};
+	if (typeof args[1] === "string") args[1] = "*";
+	if (args[1] && typeof args[1] === "object") {
+		args[1] = { targetOrigin: "*", transfer: args[1].transfer };
+	}
+}
+
 export default function (client: ScramjetClient, self: Self) {
-	if (iswindow)
+	let callFromWindow:
+		| ((fn: Window["postMessage"], target: Window, args: any[]) => void)
+		| undefined;
+	if (iswindow) {
+		// The browser takes MessageEvent.source from the realm calling the
+		// native method. A bound method from the target window loses that
+		// information for string-only messages (for example, Google's IMA SDK).
+		callFromWindow = client.natives.call(
+			"Function",
+			null,
+			"apply",
+			"return (fn, target, args) => apply(fn, target, args);",
+		)(Reflect_apply);
+
 		client.Proxy("window.postMessage", {
 			apply(ctx) {
 				// so we need to send the real origin here, since the recieving window can't possibly know.
@@ -60,26 +89,15 @@ export default function (client: ScramjetClient, self: Self) {
 				// 	self.document,
 				// 	callerClient === client
 				// );
-				const inherit =
-					callerClient.url.href === "about:srcdoc" ||
-					callerClient.url.href === "about:blank";
-				ctx.args[0] = {
-					$scramjet$messagetype: "window",
-					$scramjet$origin: inherit
-						? callerClient.global.parent[SCRAMJETCLIENT].url.origin
-						: callerClient.url.origin,
-					$scramjet$data: ctx.args[0],
-				};
-				// console.error("?", ctx.args);
-				// eval("debugger");
-
-				// * origin because obviously
-				if (typeof ctx.args[1] === "string") ctx.args[1] = "*";
-				if (typeof ctx.args[1] === "object") ctx.args[1].targetOrigin = "*";
-
+				wrapWindowMessage(callerClient, ctx.args);
 				ctx.return(wrappedPostMessage.call(ctx.fn, ...ctx.args));
 			},
 		});
+		client.box.windowPostMessages.set(
+			(self as Window).postMessage,
+			client.natives.store["window.postMessage"],
+		);
+	}
 
 	client.Proxy("BroadcastChannel.prototype.postMessage", {
 		apply(ctx) {
@@ -109,9 +127,17 @@ export default function (client: ScramjetClient, self: Self) {
 	});
 	Object_defineProperty(self, client.config.globals.wrappostmessagefn, {
 		value: function (obj: any) {
-			if (!obj || typeof obj.postMessage !== "function") return obj;
+			const postMessage = obj?.postMessage;
+			if (typeof postMessage !== "function") return obj;
+			const nativePostMessage = client.box.windowPostMessages.get(postMessage);
 			return {
-				postMessage: obj.postMessage.bind(obj),
+				postMessage:
+					callFromWindow && nativePostMessage
+						? (...args: any[]) => {
+								wrapWindowMessage(client, args);
+								callFromWindow(nativePostMessage, obj, args);
+							}
+						: postMessage.bind(obj),
 			};
 		},
 		configurable: false,

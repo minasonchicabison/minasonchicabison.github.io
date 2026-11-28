@@ -133,6 +133,20 @@ export default [
 		`,
 	}),
 	basicTest({
+		name: "frames-srcdoc-in-about-blank",
+		js: `
+			const blank = document.createElement("iframe");
+			document.body.appendChild(blank);
+			const nested = blank.contentDocument.createElement("iframe");
+			const loaded = new Promise(resolve => nested.addEventListener("load", resolve, { once: true }));
+			nested.srcdoc = '<p id="verification">verification frame loaded</p>';
+			blank.contentDocument.body.appendChild(nested);
+			await loaded;
+			assertEqual(nested.contentDocument.querySelector("#verification").textContent,
+				"verification frame loaded", "nested srcdoc should load inside about:blank");
+		`,
+	}),
+	basicTest({
 		name: "frames-document-write",
 		js: `
 			const f = document.createElement("iframe");
