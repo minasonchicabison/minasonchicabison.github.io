@@ -160,6 +160,10 @@ export default function (client: ScramjetClient, self: typeof window) {
 	// third-party creative frames, so checking only client.url misses those
 	// descendants and drops the autoplay delegation chain.
 	const isWithinGeForceNowFrameTree = () => {
+		// An opaque-origin ad frame cannot reliably inspect its ancestors.
+		// The controller propagates this marker when it hooks each child.
+		if (client.context.geforceNowFrameTree) return true;
+
 		let currentWindow: any = self;
 		for (let depth = 0; depth < 16; depth++) {
 			try {
@@ -171,6 +175,7 @@ export default function (client: ScramjetClient, self: typeof window) {
 					hostname === "geforcenow.com" ||
 					hostname.endsWith(".geforcenow.com")
 				) {
+					client.context.geforceNowFrameTree = true;
 					return true;
 				}
 
@@ -183,10 +188,10 @@ export default function (client: ScramjetClient, self: typeof window) {
 		}
 
 		const hostname = client.url.hostname.toLowerCase();
-		return (
-			hostname === "geforcenow.com" ||
-			hostname.endsWith(".geforcenow.com")
-		);
+		const isGeForceNow =
+			hostname === "geforcenow.com" || hostname.endsWith(".geforcenow.com");
+		if (isGeForceNow) client.context.geforceNowFrameTree = true;
+		return isGeForceNow;
 	};
 
 	const withAutoplayPermission = (value: unknown) => {

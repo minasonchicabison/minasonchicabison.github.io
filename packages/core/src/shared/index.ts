@@ -49,6 +49,8 @@ export type ScramjetContext = {
 	prefix: URL;
 	interface: ScramjetInterface;
 	cookieJar: CookieJar;
+	/** True for the GeForce NOW document and all of its nested frames. */
+	geforceNowFrameTree?: boolean;
 	hooks?: {
 		rewriter: {
 			html: TapInstance<HtmlRewriterHooks>;

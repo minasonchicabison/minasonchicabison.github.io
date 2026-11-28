@@ -202,6 +202,11 @@ async function waitForServiceWorkerController(
 
 const serviceWorkers = navigator.serviceWorker;
 
+function isGeForceNowHostname(hostname?: string): boolean {
+	const normalized = hostname?.toLowerCase() ?? "";
+	return normalized === "geforcenow.com" || normalized.endsWith(".geforcenow.com");
+}
+
 function getServiceWorkerContainer(global: typeof globalThis): ServiceWorkerContainer {
 	try {
 		// Same-origin child frames have their own service-worker client. Use
@@ -216,6 +221,7 @@ function getServiceWorkerContainer(global: typeof globalThis): ServiceWorkerCont
 }
 
 type Init = {
+	geforceNowFrameTree?: boolean;
 	config: Config;
 	sjconfig: ScramjetConfig;
 	prefix: URL;
@@ -407,6 +413,7 @@ class ExecutionContextWrapper {
 			config: this.init.sjconfig,
 			prefix: this.init.prefix,
 			cookieJar: this.cookieJar,
+			geforceNowFrameTree: Boolean(this.init.geforceNowFrameTree),
 			interface: {
 				getInjectScripts: this.init.yieldGetInjectScripts(
 					this.init.config,
@@ -430,15 +437,26 @@ class ExecutionContextWrapper {
 				return false;
 			},
 			hookSubcontext: (frameself) => {
-				const context = new ExecutionContextWrapper(frameself, {
+				// Opaque-origin ad frames cannot reliably inspect their ancestors.
+				// Carry the GeForce NOW context forward when Scramjet hooks descendants.
+				const nestedFrameTree =
+					Boolean(context.geforceNowFrameTree) ||
+					isGeForceNowHostname(this.client.url.hostname);
+				const nested = new ExecutionContextWrapper(frameself, {
 					...this.init,
 					cookies: this.cookieJar.dump(),
+					geforceNowFrameTree: nestedFrameTree,
 				});
-				return context.client;
+				return nested.client;
 			},
 			initHeaders: this.init.initHeaders,
 			history: this.init.history,
 		});
+		// Detect the initial proxied GeForce NOW page once, then retain that
+		// fact in ScramjetContext for descendants with opaque origins.
+		if (isGeForceNowHostname(this.client.url.hostname)) {
+			context.geforceNowFrameTree = true;
+		}
 		const frameInitContext = {
 			window: this.global.window,
 			client: this.client,

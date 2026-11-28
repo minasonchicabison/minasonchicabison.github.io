@@ -368,6 +368,7 @@ function traverseParsedHtml(
 			"innovid.com",
 		];
 		if (
+			context.geforceNowFrameTree ||
 			autoplayFrameHosts.some(
 				(host) => hostname === host || hostname.endsWith("." + host)
 			)
