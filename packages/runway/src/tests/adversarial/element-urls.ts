@@ -1,4 +1,4 @@
-import { basicTest } from "../../testcommon.ts";
+import { basicTest, serverTest } from "../../testcommon.ts";
 
 // URL-bearing element properties are reflected: the attribute keeps the page's
 // literal value while the IDL property resolves against the *real* document
@@ -256,6 +256,38 @@ export default [
 			assert(String(img.currentSrc).includes("wide.png"),
 				"the <source> candidate was selected over the fallback: " + img.currentSrc);
 		`,
+	}),
+	serverTest({
+		name: "elurls-base-relative-chunk-after-history-navigation",
+		start: async (server) => {
+			server.on("request", (req, res) => {
+				if (req.url === "/mall/") {
+					res.writeHead(200, { "Content-Type": "text/html" });
+					res.end(`<!doctype html><head><base href="#"><script src="/case.js"></script></head><body></body>`);
+				} else if (req.url === "/case.js") {
+					res.writeHead(200, { "Content-Type": "application/javascript" });
+					res.end(`runTest(async () => {
+						history.pushState(null, "", "/games?asset=1");
+						assertEqual(new URL("chunk.js", document.baseURI).pathname, "/mall/chunk.js");
+						const script = document.createElement("script");
+						script.type = "module";
+						script.src = "chunk.js";
+						await new Promise((resolve, reject) => {
+							script.onload = resolve;
+							script.onerror = () => reject(new Error("Could not load " + script.src));
+							document.head.appendChild(script);
+						});
+						assertEqual(window.chunkExecuted, true);
+					}, true);`);
+				} else if (req.url === "/mall/chunk.js") {
+					res.writeHead(200, { "Content-Type": "application/javascript" });
+					res.end("window.chunkExecuted = true;");
+				} else if (req.url === "/") {
+					res.writeHead(302, { Location: "/mall/" });
+					res.end();
+				}
+			});
+		},
 	}),
 	basicTest({
 		// KNOWN FAILURE: SVGAnimatedString.baseVal is absolutized instead of

@@ -27,7 +27,14 @@ export function getTransport(
 	const wisp = wispOverride ?? demoSettingsStore.wispUrl;
 	return kind === "epoxy"
 		? new EpoxyClient({ wisp })
-		: new LibcurlClient({ wisp });
+		: new LibcurlClient({
+				wisp,
+				// Workers allow only six concurrent outgoing connections during
+				// setup. Leave room for a WebSocket alongside HTTP traffic.
+				connections: new URL(wisp).hostname.endsWith(".workers.dev")
+					? [5, 5, 4]
+					: undefined,
+			});
 }
 
 async function pickWisp(): Promise<string> {
