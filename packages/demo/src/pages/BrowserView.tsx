@@ -573,8 +573,6 @@ const SETTINGS_CSS = `
 .mws input{box-sizing:border-box;width:100%;height:37px;min-width:0;padding:0 10px;border:1px solid rgba(255,255,255,.15);border-radius:11px;background:rgba(4,5,13,.72);color:#fff;font:600 13px system-ui,sans-serif;outline:0}
 .mws input:focus{border-color:var(--mw-accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--mw-accent) 25%,transparent)}
 .mws .mws-tab-form button{grid-column:1/-1;justify-content:center;background:color-mix(in srgb,var(--mw-accent) 24%,rgba(255,255,255,.08));border-color:color-mix(in srgb,var(--mw-accent) 55%,transparent);padding:10px}
-.mws .mws-toggle{display:flex;align-items:center;gap:9px;margin:10px 0 12px;color:#e7e7f4;font-size:12px;font-weight:700}
-.mws .mws-toggle input{width:16px;height:16px;margin:0;accent-color:var(--mw-accent);flex:none}
 .mws .mws-tab-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
 .mws .mws-tab-actions button{justify-content:center;text-align:center}
 .mws .mws-tab-actions button[data-tab-save]{background:color-mix(in srgb,var(--mw-accent) 24%,rgba(255,255,255,.08));border-color:color-mix(in srgb,var(--mw-accent) 55%,transparent)}
@@ -634,7 +632,6 @@ function toggleSettings(ev?: Event) {
 		`</div></section>
 		<section>
 			<h3>Tab cloaking</h3>
-			<label class="mws-toggle"><input type="checkbox" id="mws-tab-enabled"><span>Use a custom tab name and favicon</span></label>
 			<div class="mws-tab-form">
 				<label>Tab name<input id="mws-tab-title" type="text" maxlength="60" autocomplete="off" placeholder="Google"></label>
 				<label>Favicon URL<input id="mws-tab-favicon" type="text" autocomplete="off" spellcheck="false" placeholder="https://example.com/favicon.png"></label>
@@ -647,13 +644,11 @@ function toggleSettings(ev?: Event) {
 		<div class="foot">Website cookies and storage are kept in this browser profile. Nothing is uploaded to Minason. Clearing this site’s browser data can sign you out and reset settings.</div>`;
 	el.querySelector(".mws-close")!.addEventListener("click", closeSettings);
 
-	const tabEnabledInput = el.querySelector<HTMLInputElement>("#mws-tab-enabled")!;
 	const tabTitleInput = el.querySelector<HTMLInputElement>("#mws-tab-title")!;
 	const tabFaviconInput = el.querySelector<HTMLInputElement>("#mws-tab-favicon")!;
 	const tabUploadInput = el.querySelector<HTMLInputElement>("#mws-tab-upload")!;
 	const tabSaved = el.querySelector<HTMLElement>(".mws-saved")!;
 	let uploadedTabFavicon = "";
-	tabEnabledInput.checked = ls.get(TAB_CLOAK_ENABLED_KEY, "false") === "true";
 	tabTitleInput.value = ls.get(TAB_CLOAK_TITLE_KEY, DEFAULT_TAB_TITLE);
 	const savedTabFavicon = ls.get(TAB_CLOAK_FAVICON_KEY, "");
 	if (savedTabFavicon.startsWith("data:image/")) {
@@ -699,14 +694,13 @@ function toggleSettings(ev?: Event) {
 			return;
 		}
 		const title = tabTitleInput.value.trim().slice(0, 60) || DEFAULT_TAB_TITLE;
-		ls.set(TAB_CLOAK_ENABLED_KEY, String(tabEnabledInput.checked));
+		ls.set(TAB_CLOAK_ENABLED_KEY, "true");
 		ls.set(TAB_CLOAK_TITLE_KEY, title);
 		ls.set(TAB_CLOAK_FAVICON_KEY, favicon);
 		applyTabIdentity();
 		tabSaved.textContent = "Saved on this device.";
 	});
 	el.querySelector<HTMLButtonElement>("[data-tab-reset]")!.addEventListener("click", () => {
-		tabEnabledInput.checked = false;
 		tabTitleInput.value = DEFAULT_TAB_TITLE;
 		tabFaviconInput.value = "";
 		tabFaviconInput.placeholder = "https://example.com/favicon.png";
