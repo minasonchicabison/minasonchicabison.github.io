@@ -683,7 +683,12 @@ function yieldGetInjectScripts(
 		}
 		return [
 			script(config.scramjetPath),
-			script(prefix.href + config.virtualWasmPath),
+			// The parent already has the rewriter for a srcdoc created in a
+			// local helper frame. That child may have no service worker.
+			...(htmlcontext.apisource === "set HTMLIFrameElement.prototype.srcdoc" &&
+			meta.origin.protocol === "about:"
+				? []
+				: [script(prefix.href + config.virtualWasmPath)]),
 			script(config.injectPath),
 			script(
 				"data:text/javascript;charset=utf-8;base64," +

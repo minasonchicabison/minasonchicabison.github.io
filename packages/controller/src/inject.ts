@@ -17,6 +17,7 @@ import {
 	CookieJar,
 	SCRAMJETCLIENT,
 	ScramjetClient,
+	isJavascriptMimeType,
 	setWasm,
 	Tap,
 	type CookieSyncOptions,
@@ -240,7 +241,88 @@ type Init = {
 	history: TrackedHistoryState[];
 };
 
+type ClientWindow = Window & { [SCRAMJETCLIENT]?: ScramjetClient };
+
+function recoverSrcdocScripts(prefix: URL) {
+	if (location.href !== "about:srcdoc" || serviceWorkers?.controller) return;
+	const client = (window as unknown as ClientWindow)[SCRAMJETCLIENT];
+	let owner = window.parent;
+	try {
+		while (!owner.navigator.serviceWorker?.controller) {
+			if (owner.parent === owner) return;
+			owner = owner.parent;
+		}
+	} catch {
+		return;
+	}
+	const ownerClient = (owner as ClientWindow)[SCRAMJETCLIENT];
+	const fetchScript = ownerClient?.natives.store["fetch"] ?? owner.fetch;
+	const natives = client?.natives.store;
+	const nativeGet =
+		natives?.["Element.prototype.getAttribute"] ?? Element.prototype.getAttribute;
+	const nativeSet =
+		natives?.["Element.prototype.setAttribute"] ?? Element.prototype.setAttribute;
+	const nativeCreate =
+		natives?.["Document.prototype.createElement"] ?? Document.prototype.createElement;
+	const nativeInsert =
+		natives?.["Node.prototype.insertBefore"] ?? Node.prototype.insertBefore;
+	const createBlobUrl = (
+		natives?.["URL.createObjectURL"] ?? URL.createObjectURL
+	).bind(URL);
+	const revokeBlobUrl = (
+		natives?.["URL.revokeObjectURL"] ?? URL.revokeObjectURL
+	).bind(URL);
+	const attempted = new WeakSet<HTMLScriptElement>();
+	document.addEventListener(
+		"error",
+		(event) => {
+			const script = event.target;
+			if (
+				serviceWorkers?.controller ||
+				!(script instanceof HTMLScriptElement) ||
+				(script.type && !isJavascriptMimeType(script.type)) ||
+				attempted.has(script)
+			) return;
+			const original = nativeGet.call(script, "scramjet-attr-src");
+			const source = nativeGet.call(script, "src");
+			if (!original || !source?.startsWith(prefix.href)) return;
+			attempted.add(script);
+
+			// The controlled ancestor sends the same rewritten URL through
+			// Scramjet's cookie, transport and JS rewrite pipeline.
+			const url = new URL(source);
+			url.searchParams.set("$dest", "script");
+			void fetchScript.call(owner, url.href)
+				.then(async (response: Response) => {
+					if (!response.ok) throw new Error(`HTTP ${response.status}`);
+					if (!isJavascriptMimeType(response.headers.get("content-type") ?? "")) {
+						throw new Error("Expected a JavaScript response");
+					}
+					const code = await response.text();
+					const parent = script.parentNode;
+					if (!parent || !script.isConnected) return;
+					const blobUrl = createBlobUrl(new Blob([code], { type: "application/javascript" }));
+					const replacement = nativeCreate.call(document, "script");
+					const cleanup = () => revokeBlobUrl(blobUrl);
+					replacement.addEventListener("load", cleanup, { once: true });
+					replacement.addEventListener("error", cleanup, { once: true });
+					nativeSet.call(replacement, "src", blobUrl);
+					nativeSet.call(replacement, "scramjet-attr-src", original);
+					try {
+						nativeInsert.call(parent, replacement, script.nextSibling);
+					} catch (error) {
+						cleanup();
+						throw error;
+					}
+				})
+				.catch((error: unknown) => console.warn("Srcdoc script recovery failed", error));
+		},
+		{ capture: true }
+	);
+}
+
 export function load(init: Init) {
+	recoverSrcdocScripts(init.prefix);
 	if (SCRAMJETCLIENT in globalThis) {
 		((globalThis as any)[SCRAMJETCLIENT] as ScramjetClient).syncDocumentInit({
 			initHeaders: init.initHeaders,
@@ -250,6 +332,15 @@ export function load(init: Init) {
 		return;
 	}
 	if (!("WASM" in self)) {
+		if (location.href === "about:srcdoc") {
+			const parentClient = (window.parent as ClientWindow)[SCRAMJETCLIENT];
+			if (parentClient) {
+				parentClient.init
+					.hookSubcontext(globalThis as Parameters<typeof parentClient.init.hookSubcontext>[0])
+					.syncDocumentInit(init);
+				return;
+			}
+		}
 		throw new Error("WASM not found in global scope!");
 	}
 	const wasm = Uint8Array.from(atob(self.WASM as string), (c) => c.charCodeAt(0));
