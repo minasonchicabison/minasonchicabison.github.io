@@ -5,6 +5,7 @@ import { defaultConfig } from "@mercuryworkshop/scramjet";
 import { Controller } from "@mercuryworkshop/scramjet-controller";
 import { HttpCachePlugin } from "@mercuryworkshop/scramjet-utils";
 import { DEFAULT_WISP_URL, demoSettingsStore, WISP_URLS } from "./store";
+import { limitRequests } from "./request-limit";
 import {
 	connectWisp,
 	getActiveWispUrl,
@@ -25,16 +26,19 @@ export function getTransport(
 	kind: string = demoSettingsStore.transport
 ): LibcurlClient | EpoxyClient {
 	const wisp = wispOverride ?? demoSettingsStore.wispUrl;
-	return kind === "epoxy"
-		? new EpoxyClient({ wisp })
-		: new LibcurlClient({
-				wisp,
-				// Workers allow only six concurrent outgoing connections during
-				// setup. Leave room for a WebSocket alongside HTTP traffic.
-				connections: new URL(wisp).hostname.endsWith(".workers.dev")
-					? [5, 5, 4]
-					: undefined,
-			});
+	// Leave room for the WebSocket during HTTP connection bursts on Workers.
+	const isWorkerRelay = new URL(wisp).hostname.endsWith(".workers.dev");
+	if (kind === "epoxy") {
+		const transport = new EpoxyClient({ wisp });
+		if (isWorkerRelay) {
+			transport.request = limitRequests(transport.request.bind(transport), 5);
+		}
+		return transport;
+	}
+	return new LibcurlClient({
+		wisp,
+		connections: isWorkerRelay ? [5, 5, 4] : undefined,
+	});
 }
 
 async function pickWisp(): Promise<string> {
