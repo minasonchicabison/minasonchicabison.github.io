@@ -133,6 +133,20 @@ export default [
 		`,
 	}),
 	basicTest({
+		name: "frames-srcdoc-in-about-blank",
+		js: `
+			const blank = document.createElement("iframe");
+			document.body.appendChild(blank);
+			const nested = blank.contentDocument.createElement("iframe");
+			const loaded = new Promise(resolve => nested.addEventListener("load", resolve, { once: true }));
+			nested.srcdoc = '<p id="verification">verification frame loaded</p>';
+			blank.contentDocument.body.appendChild(nested);
+			await loaded;
+			assertEqual(nested.contentDocument.querySelector("#verification").textContent,
+				"verification frame loaded", "nested srcdoc should load inside about:blank");
+		`,
+	}),
+	basicTest({
 		name: "frames-document-write",
 		js: `
 			const f = document.createElement("iframe");
@@ -161,5 +175,47 @@ export default [
 			f.sandbox.add("allow-forms");
 			assert(f.sandbox.contains("allow-forms"), "token list is mutable");
 		`,
+	}),
+
+	serverTest({
+		name: "frames-srcdoc-about-blank-ad-verification-scripts",
+		hostname: "srcdoc-proxy.test",
+		cleartextHosts: ["verification.test"],
+		autoPass: false,
+		js: `
+			const blank = document.createElement("iframe");
+			document.body.appendChild(blank);
+			const nested = blank.contentDocument.createElement("iframe");
+			const loaded = new Promise((resolve) =>
+				nested.addEventListener("load", resolve, { once: true })
+			);
+			nested.srcdoc = [
+				'<script src="https://verification.test/om-verification-a.js"></script>',
+				'<script src="https://verification.test/om-verification-b.js"></script>'
+			].join("");
+			blank.contentDocument.body.appendChild(nested);
+			await loaded;
+			assertEqual(nested.contentWindow.__verificationA, true,
+				"first nested ad verification script should execute");
+			assertEqual(nested.contentWindow.__verificationB, true,
+				"second nested ad verification script should execute");
+			pass("both nested srcdoc verification scripts loaded through the proxy");
+		`,
+		start: async (server) => {
+			server.on("request", (req, res) => {
+				const source =
+					req.url === "/om-verification-a.js"
+						? "window.__verificationA = true;"
+						: req.url === "/om-verification-b.js"
+							? "window.__verificationB = true;"
+							: null;
+				if (source === null) return;
+				res.writeHead(200, {
+					"Content-Type": "application/javascript",
+					"Cache-Control": "no-store",
+				});
+				res.end(source);
+			});
+		},
 	}),
 ];

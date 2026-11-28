@@ -110,14 +110,19 @@ export const htmlRules: {
 		imagesrcset: ["link"],
 	},
 	{
-		fn: (value, context, meta) =>
-			rewriteHtml(
+		fn: (value, context, meta) => {
+			// An about:blank helper can create srcdoc verification frames. Its
+			// URL has an origin of "null", which is not itself a valid URL.
+			const origin =
+				meta.origin.origin === "null"
+					? meta.origin
+					: new _URL(meta.origin.origin);
+			return rewriteHtml(
 				value,
 				context,
 				{
-					// for srcdoc origin is the origin of the page that the iframe is on. base and path get dropped
-					origin: new _URL(meta.origin.origin),
-					base: new _URL(meta.origin.origin),
+					origin,
+					base: origin,
 					topFrameName: meta.topFrameName,
 					parentFrameName: meta.parentFrameName,
 					referrerPolicy: meta.referrerPolicy,
@@ -128,7 +133,8 @@ export const htmlRules: {
 					source: meta.origin.href,
 					apisource: "set HTMLIFrameElement.prototype.srcdoc",
 				}
-			),
+			);
+		},
 
 		// srcdoc
 		srcdoc: ["iframe"],
