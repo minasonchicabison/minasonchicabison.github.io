@@ -198,12 +198,15 @@ async function fetchGeForceSessionUpdate(
 		try {
 			return await handler.client.fetch(url, { ...init, body: first });
 		} catch (error) {
-			// libcurl 35 is a TLS handshake failure, before the HTTP PUT
-			// can be sent. Do not replay ambiguous failures or HTTP errors.
-			if (
-				!(error instanceof TypeError) ||
-				!/^Request failed with error code 35:/.test(error.message)
-			) {
+			// These engines report a TLS failure while establishing the
+			// connection. Do not replay HTTP errors or failures after send.
+			const libcurlHandshakeFailed =
+				error instanceof TypeError &&
+				/^Request failed with error code 35:/.test(error.message);
+			const epoxyHandshakeClosed =
+				error instanceof Error &&
+				/^Hyper client: .*Error\(Connect, .*"tls handshake eof"/.test(error.message);
+			if (!libcurlHandshakeFailed && !epoxyHandshakeClosed) {
 				throw error;
 			}
 			retried = true;

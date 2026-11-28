@@ -15,12 +15,23 @@ export default [
 				const original = transport.request;
 				const results = [];
 				const host = "https://np-test.cloudmatchbeta.nvidiagrid.net";
+				const epoxyHandshake =
+					'Hyper client: hyper_util::client::legacy::Error(Connect, Io(Custom { kind: UnexpectedEof, error: "tls handshake eof" })) (client error (IO: Custom { kind: UnexpectedEof, error: "tls handshake eof" } (tls handshake eof)))';
+				const session = "/v2/session/00000000-0000-4000-8000-000000000001";
 				try {
-					for (const [method, failure, path] of [
-						["PUT", 35, "/v2/session/00000000-0000-4000-8000-000000000001"],
-						["PUT", 56, "/v2/session/00000000-0000-4000-8000-000000000001"],
-						["PUT", 403, "/v2/session/00000000-0000-4000-8000-000000000001"],
-						["POST", 35, "/v2/session"],
+					for (const [method, failure, path, persistent] of [
+						["PUT", 35, session, false],
+						["PUT", epoxyHandshake, session, false],
+						["PUT", epoxyHandshake, session, true],
+						[
+							"PUT",
+							epoxyHandshake.replace("Error(Connect,", "Error(SendRequest,"),
+							session,
+							false,
+						],
+						["PUT", 56, session, false],
+						["PUT", 403, session, false],
+						["POST", epoxyHandshake, "/v2/session", false],
 					] as const) {
 						const bodies: string[] = [];
 						transport.request = async (
@@ -32,7 +43,8 @@ export default [
 								throw new Error("Unexpected request in session fixture");
 							}
 							bodies.push(await new Response(body).text());
-							const status = bodies.length === 1 ? failure : 200;
+							const status = bodies.length === 1 || persistent ? failure : 200;
+							if (typeof status === "string") throw new Error(status);
 							if (status < 100) {
 								throw new TypeError(
 									`Request failed with error code ${status}: test failure`,
@@ -57,6 +69,9 @@ export default [
 			const body = '{"state":"ad-ended"}';
 			const expected = [
 				{ status: 200, bodies: [body, body] },
+				{ status: 200, bodies: [body, body] },
+				{ status: 500, bodies: [body, body] },
+				{ status: 500, bodies: [body] },
 				{ status: 500, bodies: [body] },
 				{ status: 403, bodies: [body] },
 				{ status: 500, bodies: [body] },
