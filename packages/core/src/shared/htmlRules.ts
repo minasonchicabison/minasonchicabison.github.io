@@ -14,6 +14,13 @@ export const htmlRules: {
 	) => string | null;
 }[] = [
 	{
+		// Freeze the base against the document URL, so pushState cannot move
+		// an existing relative or fragment-only base to a different directory.
+		fn: (value, context, meta) =>
+			rewriteUrl(value, context, { ...meta, base: meta.origin }),
+		href: ["base"],
+	},
+	{
 		fn: (value, context, meta) =>
 			rewriteUrl(value, context, meta, { navigateType: "location" }),
 

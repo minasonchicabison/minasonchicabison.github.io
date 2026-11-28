@@ -185,6 +185,35 @@ const AD_HOST_RE =
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
+async function fetchGeForceSessionUpdate(
+	handler: ScramjetFetchHandler,
+	url: URL,
+	init: BareRequestInit
+): Promise<BareResponse> {
+	const body = init.body;
+	const branches = body instanceof ReadableStream ? body.tee() : undefined;
+	const [first, retry] = branches ?? [body, body];
+	let retried = false;
+	try {
+		try {
+			return await handler.client.fetch(url, { ...init, body: first });
+		} catch (error) {
+			// libcurl 35 is a TLS handshake failure, before the HTTP PUT
+			// can be sent. Do not replay ambiguous failures or HTTP errors.
+			if (
+				!(error instanceof TypeError) ||
+				!/^Request failed with error code 35:/.test(error.message)
+			) {
+				throw error;
+			}
+			retried = true;
+			await sleep(250);
+			return await handler.client.fetch(url, { ...init, body: retry });
+		}
+	} finally {
+		if (!retried && branches) void branches[1].cancel().catch(() => {});
+	}
+}
 
 /**
  * transport.request wrapper that retries idempotent, body-less requests when
@@ -199,6 +228,14 @@ async function fetchWithRetry(
 	init: BareRequestInit
 ): Promise<BareResponse> {
 	const method = String(init.method || "GET").toUpperCase();
+	if (
+		method === "PUT" &&
+		url.protocol === "https:" &&
+		url.hostname.endsWith(".cloudmatchbeta.nvidiagrid.net") &&
+		/^\/v2\/session\/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(url.pathname)
+	) {
+		return fetchGeForceSessionUpdate(handler, url, init);
+	}
 	const idempotent = (method === "GET" || method === "HEAD") && !init.body;
 	const isAd = AD_HOST_RE.test(url.hostname);
 	const maxAttempts = idempotent ? 3 : 1;

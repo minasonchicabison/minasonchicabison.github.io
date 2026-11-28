@@ -360,16 +360,20 @@ export class ScramjetClient {
 					const base = client.natives.call(
 						"Document.prototype.querySelector",
 						client.global.document,
-						"base"
+						"base[href]"
 					);
 					if (base) {
-						let url = base.getAttribute("href");
-						if (!url) return client.url;
-						const frag = url.indexOf("#");
-						url = url.substring(0, frag === -1 ? undefined : frag);
-						if (!url) return client.url;
-
-						return new _URL(url, client.url.origin);
+						const href = client.natives.call(
+							"Element.prototype.getAttribute",
+							base,
+							"href"
+						) as string;
+						const url = href.startsWith(client.context.prefix.href)
+							? client.unrewriteUrl(href)
+							: href;
+						if (_URL.canParse(url, client.url)) {
+							return new _URL(url, client.url);
+						}
 					}
 				}
 

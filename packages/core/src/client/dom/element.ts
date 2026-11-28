@@ -124,7 +124,7 @@ export default function (client: ScramjetClient, self: typeof window) {
 			self.HTMLScriptElement,
 			self.HTMLSourceElement,
 		],
-		href: [self.HTMLAnchorElement, self.HTMLLinkElement],
+		href: [self.HTMLAnchorElement, self.HTMLLinkElement, self.HTMLBaseElement],
 		data: [self.HTMLObjectElement],
 		action: [self.HTMLFormElement],
 		formaction: [self.HTMLButtonElement, self.HTMLInputElement],
@@ -461,14 +461,8 @@ export default function (client: ScramjetClient, self: typeof window) {
 			const doc = client.box.instanceof(node, "Document")
 				? (node as Document)
 				: node.ownerDocument;
-			const base = doc?.querySelector("base[href]") as HTMLBaseElement | null;
-
-			if (base) {
-				const href = base.getAttribute("href") || base.href;
-				if (href) return new URL(href, client.url.href).href;
-			}
-
-			return client.url.href;
+			const documentClient = doc && client.box.documents.get(doc);
+			return (documentClient ?? client).meta.base.href;
 		},
 		set() {
 			return false;

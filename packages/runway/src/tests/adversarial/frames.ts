@@ -195,6 +195,13 @@ export default [
 			].join("");
 			blank.contentDocument.body.appendChild(nested);
 			await loaded;
+			// Uncontrolled helper frames may recover a failed script request
+			// through the parent worker after the native frame load event.
+			const deadline = Date.now() + 4000;
+			while ((!nested.contentWindow.__verificationA ||
+				!nested.contentWindow.__verificationB) && Date.now() < deadline) {
+				await new Promise(resolve => setTimeout(resolve, 25));
+			}
 			assertEqual(nested.contentWindow.__verificationA, true,
 				"first nested ad verification script should execute");
 			assertEqual(nested.contentWindow.__verificationB, true,
