@@ -89,6 +89,47 @@ function isFaviconImage(value: string): boolean {
 	return /^https?:\/\//i.test(value) || /^data:image\//i.test(value);
 }
 
+const DEFAULT_TAB_TITLE = "Google";
+const DEFAULT_TAB_FAVICON = "https://www.google.com/favicon.ico";
+const TAB_CLOAK_ENABLED_KEY = "mw-tab-cloak-enabled";
+const TAB_CLOAK_TITLE_KEY = "mw-tab-cloak-title";
+const TAB_CLOAK_FAVICON_KEY = "mw-tab-cloak-favicon";
+
+function normalizeCustomFavicon(value: string): string {
+	const candidate = value.trim();
+	if (!candidate) return "";
+	if (/^https:\/\//i.test(candidate)) {
+		try {
+			const url = new URL(candidate);
+			return url.protocol === "https:" && !url.username && !url.password ? url.href : "";
+		} catch {
+			return "";
+		}
+	}
+	if (
+		candidate.length <= 180_000 &&
+		/^data:image\/(?:png|jpeg|gif|webp|x-icon|vnd\.microsoft\.icon);base64,[a-z0-9+/]+={0,2}$/i.test(candidate)
+	) return candidate;
+	return "";
+}
+
+function applyTabIdentity() {
+	const enabled = ls.get(TAB_CLOAK_ENABLED_KEY, "false") === "true";
+	const customTitle = ls.get(TAB_CLOAK_TITLE_KEY, DEFAULT_TAB_TITLE).trim();
+	const customFavicon = normalizeCustomFavicon(ls.get(TAB_CLOAK_FAVICON_KEY, ""));
+	document.title = enabled && customTitle ? customTitle.slice(0, 60) : DEFAULT_TAB_TITLE;
+
+	let faviconLink = document.getElementById("mw-app-favicon") as HTMLLinkElement | null;
+	if (!faviconLink) {
+		faviconLink = document.createElement("link");
+		faviconLink.id = "mw-app-favicon";
+		faviconLink.rel = "icon";
+		document.head.appendChild(faviconLink);
+	}
+	faviconLink.removeAttribute("type");
+	faviconLink.href = enabled && customFavicon ? customFavicon : DEFAULT_TAB_FAVICON;
+}
+
 function applyTabAppearance(tab: Tab) {
 	tab.title = tabTitleFor(tab.url);
 	tab.icon = "🌐";
@@ -384,12 +425,7 @@ function sync() {
 	browserState.url = t?.url ?? "";
 	browserState.title = t?.title ?? "New tab";
 	browserState.frame = t?.frame as Frame;
-	document.title = t?.url ? `${t.title} - Minason Web` : "Minason Web v2";
-	const faviconLink = document.getElementById("mw-app-favicon") as HTMLLinkElement | null;
-	if (faviconLink) {
-		faviconLink.removeAttribute("type");
-		faviconLink.href = t && isFaviconImage(t.icon) ? t.icon : "/icon.png";
-	}
+	applyTabIdentity();
 	renderStrip();
 }
 
@@ -537,6 +573,12 @@ const SETTINGS_CSS = `
 .mws input{box-sizing:border-box;width:100%;height:37px;min-width:0;padding:0 10px;border:1px solid rgba(255,255,255,.15);border-radius:11px;background:rgba(4,5,13,.72);color:#fff;font:600 13px system-ui,sans-serif;outline:0}
 .mws input:focus{border-color:var(--mw-accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--mw-accent) 25%,transparent)}
 .mws .mws-tab-form button{grid-column:1/-1;justify-content:center;background:color-mix(in srgb,var(--mw-accent) 24%,rgba(255,255,255,.08));border-color:color-mix(in srgb,var(--mw-accent) 55%,transparent);padding:10px}
+.mws .mws-toggle{display:flex;align-items:center;gap:9px;margin:10px 0 12px;color:#e7e7f4;font-size:12px;font-weight:700}
+.mws .mws-toggle input{width:16px;height:16px;margin:0;accent-color:var(--mw-accent);flex:none}
+.mws .mws-tab-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.mws .mws-tab-actions button{justify-content:center;text-align:center}
+.mws .mws-tab-actions button[data-tab-save]{background:color-mix(in srgb,var(--mw-accent) 24%,rgba(255,255,255,.08));border-color:color-mix(in srgb,var(--mw-accent) 55%,transparent)}
+.mws .mws-saved{min-height:14px;margin-top:8px;color:#8ee6a3;font-size:10.5px;line-height:1.4}
 .mws .mws-hint{margin-top:8px;color:#a8a8c0;font-size:10.5px;line-height:1.5}
 .mws .foot{margin-top:15px;padding-top:12px;border-top:1px solid rgba(255,255,255,.1);font-size:10.5px;line-height:1.55;color:#a9aac0}
 .mws .saved{min-height:14px;margin-top:7px;color:#8ee6a3;font-size:10.5px}
@@ -590,8 +632,92 @@ function toggleSettings(ev?: Event) {
 			.map((key) => `<button type="button" data-engine="${key}">${ENGINES[key].n}</button>`)
 			.join("") +
 		`</div></section>
+		<section>
+			<h3>Tab cloaking</h3>
+			<label class="mws-toggle"><input type="checkbox" id="mws-tab-enabled"><span>Use a custom tab name and favicon</span></label>
+			<div class="mws-tab-form">
+				<label>Tab name<input id="mws-tab-title" type="text" maxlength="60" autocomplete="off" placeholder="Google"></label>
+				<label>Favicon URL<input id="mws-tab-favicon" type="text" autocomplete="off" spellcheck="false" placeholder="https://example.com/favicon.png"></label>
+				<label>Or upload an icon<input id="mws-tab-upload" type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/x-icon,image/vnd.microsoft.icon"></label>
+			</div>
+			<div class="mws-tab-actions"><button type="button" data-tab-save>Save settings</button><button type="button" data-tab-reset>Reset to Google</button></div>
+			<div class="mws-saved" role="status" aria-live="polite"></div>
+			<div class="mws-hint">Saved only in this browser. This changes Minason’s browser-tab title and icon, not the sites opened inside it. Use HTTPS image links or upload a small PNG, JPEG, GIF, WebP, or ICO file.</div>
+		</section>
 		<div class="foot">Website cookies and storage are kept in this browser profile. Nothing is uploaded to Minason. Clearing this site’s browser data can sign you out and reset settings.</div>`;
 	el.querySelector(".mws-close")!.addEventListener("click", closeSettings);
+
+	const tabEnabledInput = el.querySelector<HTMLInputElement>("#mws-tab-enabled")!;
+	const tabTitleInput = el.querySelector<HTMLInputElement>("#mws-tab-title")!;
+	const tabFaviconInput = el.querySelector<HTMLInputElement>("#mws-tab-favicon")!;
+	const tabUploadInput = el.querySelector<HTMLInputElement>("#mws-tab-upload")!;
+	const tabSaved = el.querySelector<HTMLElement>(".mws-saved")!;
+	let uploadedTabFavicon = "";
+	tabEnabledInput.checked = ls.get(TAB_CLOAK_ENABLED_KEY, "false") === "true";
+	tabTitleInput.value = ls.get(TAB_CLOAK_TITLE_KEY, DEFAULT_TAB_TITLE);
+	const savedTabFavicon = ls.get(TAB_CLOAK_FAVICON_KEY, "");
+	if (savedTabFavicon.startsWith("data:image/")) {
+		uploadedTabFavicon = savedTabFavicon;
+		tabFaviconInput.placeholder = "Uploaded favicon saved";
+	} else {
+		tabFaviconInput.value = savedTabFavicon;
+	}
+	tabFaviconInput.addEventListener("input", () => { uploadedTabFavicon = ""; });
+	tabUploadInput.addEventListener("change", () => {
+		const selectedFile = tabUploadInput.files?.[0];
+		if (!selectedFile) return;
+		const allowedTypes = ["image/png", "image/jpeg", "image/gif", "image/webp", "image/x-icon", "image/vnd.microsoft.icon"];
+		if (!allowedTypes.includes(selectedFile.type)) {
+			tabSaved.textContent = "Choose a PNG, JPEG, GIF, WebP, or ICO image.";
+			tabUploadInput.value = "";
+			return;
+		}
+		if (selectedFile.size > 120 * 1024) {
+			tabSaved.textContent = "That image is too large. Please keep favicon files under 120 KB.";
+			tabUploadInput.value = "";
+			return;
+		}
+		const reader = new FileReader();
+		reader.onload = () => {
+			if (typeof reader.result !== "string") {
+				tabSaved.textContent = "The selected image could not be read.";
+				return;
+			}
+			uploadedTabFavicon = reader.result;
+			tabFaviconInput.value = "";
+			tabFaviconInput.placeholder = "Uploaded icon ready to save";
+			tabSaved.textContent = "Icon ready. Select Save settings to keep it.";
+		};
+		reader.onerror = () => { tabSaved.textContent = "The selected image could not be read."; };
+		reader.readAsDataURL(selectedFile);
+	});
+	el.querySelector<HTMLButtonElement>("[data-tab-save]")!.addEventListener("click", () => {
+		const rawFavicon = uploadedTabFavicon || tabFaviconInput.value.trim();
+		const favicon = normalizeCustomFavicon(rawFavicon);
+		if (rawFavicon && !favicon) {
+			tabSaved.textContent = "Use a valid HTTPS image URL or upload a supported image file.";
+			return;
+		}
+		const title = tabTitleInput.value.trim().slice(0, 60) || DEFAULT_TAB_TITLE;
+		ls.set(TAB_CLOAK_ENABLED_KEY, String(tabEnabledInput.checked));
+		ls.set(TAB_CLOAK_TITLE_KEY, title);
+		ls.set(TAB_CLOAK_FAVICON_KEY, favicon);
+		applyTabIdentity();
+		tabSaved.textContent = "Saved on this device.";
+	});
+	el.querySelector<HTMLButtonElement>("[data-tab-reset]")!.addEventListener("click", () => {
+		tabEnabledInput.checked = false;
+		tabTitleInput.value = DEFAULT_TAB_TITLE;
+		tabFaviconInput.value = "";
+		tabFaviconInput.placeholder = "https://example.com/favicon.png";
+		tabUploadInput.value = "";
+		uploadedTabFavicon = "";
+		ls.set(TAB_CLOAK_ENABLED_KEY, "false");
+		ls.set(TAB_CLOAK_TITLE_KEY, DEFAULT_TAB_TITLE);
+		ls.set(TAB_CLOAK_FAVICON_KEY, "");
+		applyTabIdentity();
+		tabSaved.textContent = "Google tab identity restored.";
+	});
 
 	const mark = () => {
 		el.querySelectorAll<HTMLElement>("button").forEach((button) => {
